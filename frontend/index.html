@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDA Assessment Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════
+     face-api.js — loaded synchronously (no defer) so the
+     library is available as soon as camera check starts.
+     Upgraded from TinyFaceDetector → SSD MobileNet V1
+     + FaceLandmark68Net for head-rotation estimation.
+     ═══════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0a0a12;--ink2:#3d3d55;--ink3:#7b7b9a;
+  --sky:#e8edff;--sky2:#d0d9ff;
+  --accent:#3b5bdb;--accent2:#2f4ac7;--accent-glow:rgba(59,91,219,.25);
+  --ok:#0f9b58;--ok2:#0c7a46;--ok-bg:#e6f9f0;
+  --err:#c92a2a;--err-bg:#fff0f0;
+  --warn:#e67700;--warn-bg:#fff4e0;
+  --surface:#ffffff;--surface2:#f7f8ff;--border:#dde3ff;
+  --radius:14px;--shadow:0 4px 24px rgba(59,91,219,.10);
+  --shadow-lg:0 12px 48px rgba(59,91,219,.18);
+}
+body{font-family:'Inter',sans-serif;background:var(--surface2);color:var(--ink);user-select:none;overflow-x:hidden}
+.screen{display:none;min-height:100vh}
+.screen.active{display:flex;flex-direction:column}
+
+/* ── BG GRID ── */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(59,91,219,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(59,91,219,.04) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+/* ══════════════════ LOGIN ══════════════════ */
+#screen-login{align-items:center;justify-content:center;min-height:100vh;position:relative;
+  background:linear-gradient(135deg,#060618 0%,#0e1340 40%,#1a237e 100%);
+}
+#screen-login::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(59,91,219,.35) 0%,transparent 70%);
+  pointer-events:none;
+}
+.login-wrap{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:0}
+.login-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:3px;
+  color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:24px;
+  border:1px solid rgba(255,255,255,.15);padding:6px 18px;border-radius:40px;
+  backdrop-filter:blur(8px);
+}
+.login-card{
+  background:rgba(255,255,255,.06);backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,.12);border-radius:24px;
+  padding:44px 48px;width:420px;
+  box-shadow:0 24px 64px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.login-icon{font-size:44px;text-align:center;margin-bottom:6px}
+.login-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;
+  color:#fff;text-align:center;margin-bottom:4px;letter-spacing:-.5px}
+.login-sub{font-size:13px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:32px}
+.fg{margin-bottom:18px}
+.fg label{
+  display:block;font-size:11px;font-weight:600;letter-spacing:1.5px;
+  color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:8px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.fg input{
+  width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;padding:13px 16px;font-size:14px;color:#fff;outline:none;
+  font-family:'Inter',sans-serif;transition:all .2s;
+}
+.fg input::placeholder{color:rgba(255,255,255,.25)}
+.fg input:focus{border-color:rgba(99,130,255,.6);background:rgba(99,130,255,.12);
+  box-shadow:0 0 0 3px rgba(99,130,255,.15)}
+.btn-login{
+  width:100%;padding:14px;border:none;border-radius:10px;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:700;letter-spacing:.3px;
+  background:linear-gradient(135deg,#3b5bdb,#5c7cfa);color:#fff;
+  box-shadow:0 4px 20px rgba(59,91,219,.5);transition:all .25s;margin-top:4px;
+}
+.btn-login:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(59,91,219,.6)}
+
+/* ══════════════════ INSTRUCTIONS ══════════════════ */
+#screen-instructions{align-items:center;justify-content:center;padding:40px 16px}
+.inst-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  padding:44px 52px;max-width:720px;width:100%;
+  box-shadow:var(--shadow-lg);position:relative;z-index:1;
+}
+.inst-card h2{
+  font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--accent);
+  margin-bottom:6px;display:flex;align-items:center;gap:10px;
+}
+.inst-card .sub{font-size:13px;color:var(--ink3);margin-bottom:28px}
+.ilist{list-style:none;margin-bottom:24px;display:flex;flex-direction:column;gap:2px}
+.ilist li{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:12px 16px;border-radius:10px;font-size:14px;line-height:1.55;
+  border:1px solid transparent;transition:.15s;
+}
+.ilist li:hover{background:var(--sky);border-color:var(--sky2)}
+.ilist li .ic{font-size:18px;flex-shrink:0;margin-top:1px}
+.ilist li strong{font-weight:600;color:var(--ink)}
+.note{
+  padding:14px 18px;border-radius:10px;font-size:13px;line-height:1.55;
+  margin-bottom:14px;display:flex;gap:12px;align-items:flex-start;
+}
+.note-ok{background:var(--ok-bg);border-left:3px solid var(--ok);color:var(--ok2)}
+.note-warn{background:var(--warn-bg);border-left:3px solid var(--warn);color:var(--warn)}
+.btn-proceed{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:14px 40px;border:none;border-radius:12px;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:16px;font-weight:700;
+  background:var(--accent);color:#fff;
+  box-shadow:0 4px 20px var(--accent-glow);transition:all .25s;
+}
+.btn-proceed:hover{background:var(--accent2);transform:translateY(-2px);box-shadow:0 8px 28px var(--accent-glow)}
+.center{text-align:center}
+
+/* ══════════════════ CAMERA ══════════════════ */
+#screen-camera{align-items:center;justify-content:center;padding:40px 16px}
+.cam-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  padding:40px 44px;max-width:580px;width:100%;text-align:center;
+  box-shadow:var(--shadow-lg);position:relative;z-index:1;
+}
+.cam-card h2{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;margin-bottom:6px;color:var(--ink)}
+.cam-card .sub{font-size:13px;color:var(--ink3);margin-bottom:16px}
+.cam-rules{
+  background:var(--sky);border-radius:12px;padding:14px 18px;margin-bottom:18px;
+  text-align:left;font-size:13px;line-height:1.8;color:var(--ink2);
+  border:1px solid var(--sky2);
+}
+.cam-rules ul{list-style:none;padding:0}
+.cam-rules ul li::before{content:'→ ';color:var(--accent);font-weight:700}
+.cam-wrap{position:relative;display:inline-block;margin:0 auto}
+#webcam-preview{
+  width:340px;height:255px;border-radius:14px;border:2px solid var(--border);
+  background:#0a0a12;display:block;object-fit:cover;
+}
+/* Face detection canvas overlay */
+#face-canvas{
+  position:absolute;top:0;left:0;width:340px;height:255px;
+  border-radius:14px;pointer-events:none;
+}
+#cam-overlay{
+  position:absolute;inset:0;border-radius:14px;pointer-events:none;
+}
+.cam-corner{
+  position:absolute;width:24px;height:24px;border-color:var(--accent);border-style:solid;border-width:0;
+}
+.cc-tl{top:8px;left:8px;border-top-width:3px;border-left-width:3px;border-top-left-radius:4px}
+.cc-tr{top:8px;right:8px;border-top-width:3px;border-right-width:3px;border-top-right-radius:4px}
+.cc-bl{bottom:8px;left:8px;border-bottom-width:3px;border-left-width:3px;border-bottom-left-radius:4px}
+.cc-br{bottom:8px;right:8px;border-bottom-width:3px;border-right-width:3px;border-bottom-right-radius:4px}
+.cam-status-bar{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:12px;font-size:12px;font-family:'IBM Plex Mono',monospace;font-weight:600;
+}
+.cam-dot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0}
+.cam-dot.active{background:var(--ok);animation:blink 1.2s infinite}
+.cam-dot.warn{background:var(--warn);animation:blink .6s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.snap-strip{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.snap-strip img{width:56px;height:42px;border-radius:6px;border:1px solid var(--border);object-fit:cover}
+.snap-count{font-size:11px;color:var(--ink3);margin-top:6px;font-family:'IBM Plex Mono',monospace}
+.cam-actions{display:flex;gap:12px;justify-content:center;margin-top:24px}
+/* Face detection status pill */
+#face-status-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:10px;font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:600;
+  padding:5px 14px;border-radius:20px;
+  background:var(--sky);color:var(--ink2);border:1px solid var(--sky2);
+  transition:all .3s;
+}
+#face-status-pill.ok{background:var(--ok-bg);color:var(--ok2);border-color:var(--ok)}
+#face-status-pill.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+#face-status-pill.err{background:var(--err-bg);color:var(--err);border-color:var(--err)}
+
+/* ══════════════════ QUIZ ══════════════════ */
+#screen-quiz{background:var(--surface2)}
+.qhdr{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 28px;height:58px;display:flex;align-items:center;gap:16px;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 12px rgba(59,91,219,.07);
+}
+.qhdr-title{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:var(--accent);
+  display:flex;align-items:center;gap:8px;
+}
+.qhdr-title span{font-size:19px}
+.qhdr-student{font-size:12px;color:var(--ink3);flex:1;font-family:'IBM Plex Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.warn-badge{
+  font-size:12px;color:var(--err);font-weight:600;
+  background:var(--err-bg);padding:4px 12px;border-radius:20px;
+  font-family:'IBM Plex Mono',monospace;white-space:nowrap;
+}
+.timer{
+  font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:16px;
+  background:var(--accent);color:#fff;
+  padding:6px 18px;border-radius:10px;min-width:88px;text-align:center;
+  box-shadow:0 2px 10px var(--accent-glow);transition:all .3s;
+}
+.timer.warn{background:var(--warn);box-shadow:0 2px 10px rgba(230,119,0,.3)}
+.timer.danger{background:var(--err);box-shadow:0 2px 10px rgba(201,42,42,.4);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ─ WEBCAM MINI ─ */
+.cam-mini{
+  width:56px;height:42px;border-radius:6px;border:2px solid var(--border);
+  background:#0a0a12;object-fit:cover;overflow:hidden;position:relative;flex-shrink:0;
+}
+.cam-mini video{width:100%;height:100%;object-fit:cover}
+.cam-rec{
+  position:absolute;top:3px;right:3px;width:6px;height:6px;
+  border-radius:50%;background:var(--err);animation:blink 1.2s infinite;
+}
+
+.qbody{display:flex;height:calc(100vh - 58px)}
+.sidebar{
+  width:240px;background:var(--surface);border-right:1px solid var(--border);
+  padding:18px 14px;overflow-y:auto;flex-shrink:0;
+}
+.sidebar h4{
+  font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:12px;font-family:'IBM Plex Mono',monospace;
+}
+.qgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:20px}
+.qbtn{
+  aspect-ratio:1;border:1.5px solid var(--border);border-radius:7px;
+  font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;
+  background:var(--surface);cursor:pointer;transition:all .15s;color:var(--ink3);
+}
+.qbtn:hover{border-color:var(--accent);color:var(--accent)}
+.qbtn.current{border-color:var(--accent);background:var(--accent);color:#fff;box-shadow:0 2px 8px var(--accent-glow)}
+.qbtn.answered{border-color:var(--ok);background:var(--ok-bg);color:var(--ok)}
+.qbtn.flagged{border-color:var(--warn);background:var(--warn-bg);color:var(--warn)}
+.legend{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--ink3)}
+.legend-item{display:flex;align-items:center;gap:7px}
+.ldot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.progress-box{
+  margin-top:18px;background:var(--sky);border-radius:10px;padding:14px;
+  font-size:12px;line-height:1.8;color:var(--ink2);
+  font-family:'IBM Plex Mono',monospace;
+}
+/* Proctor status in sidebar */
+.proctor-box{
+  margin-top:14px;padding:12px 14px;border-radius:10px;font-size:11px;
+  font-family:'IBM Plex Mono',monospace;line-height:1.7;
+  background:var(--surface2);border:1px solid var(--border);
+}
+
+/* ─ MAIN AREA ─ */
+.main{flex:1;overflow-y:auto;padding:28px 24px}
+.qcard{
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;
+  padding:32px 36px;max-width:840px;margin:0 auto;
+  box-shadow:var(--shadow);
+}
+.qmeta{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.qnum{
+  font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--ink3);font-family:'IBM Plex Mono',monospace;
+}
+.qmod{
+  background:var(--sky);color:var(--accent);font-size:11px;font-weight:700;
+  padding:4px 14px;border-radius:20px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;
+}
+.qtext{font-size:17px;line-height:1.75;margin-bottom:28px;font-weight:500;color:var(--ink)}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opt{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:15px 20px;border:2px solid var(--border);border-radius:12px;
+  cursor:pointer;transition:all .15s;font-size:15px;line-height:1.55;
+  background:var(--surface);position:relative;
+}
+.opt:hover{border-color:var(--accent);background:var(--sky)}
+.opt.selected{border-color:var(--accent);background:#eef2ff;box-shadow:0 0 0 1px var(--accent)}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt-key{
+  font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;
+  color:var(--accent);min-width:22px;margin-top:1px;flex-shrink:0;
+}
+.opt.selected .opt-key{color:var(--accent2)}
+.qnav{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:28px;padding-top:22px;border-top:1px solid var(--border);
+}
+.bsm{
+  padding:10px 22px;border-radius:10px;font-size:13px;font-weight:700;
+  cursor:pointer;transition:all .2s;font-family:'Syne',sans-serif;letter-spacing:.2px;
+}
+.b-outline{background:transparent;border:1.5px solid var(--border);color:var(--ink2)}
+.b-outline:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.b-outline:disabled{opacity:.35;cursor:not-allowed}
+.b-flag{background:var(--warn-bg);color:var(--warn);border:1.5px solid var(--warn)}
+.b-flag:hover{background:#ffe8a3}
+.b-submit{background:var(--ok);color:#fff;border:none;box-shadow:0 2px 10px rgba(15,155,88,.3)}
+.b-submit:hover{background:var(--ok2);transform:translateY(-1px)}
+.nav-mid{display:flex;gap:8px}
+
+/* ══════════════════ MODAL ══════════════════ */
+.overlay{position:fixed;inset:0;background:rgba(10,10,18,.55);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:999}
+.overlay.show{display:flex}
+.modal{
+  background:var(--surface);border-radius:20px;padding:36px 40px;
+  max-width:460px;width:90%;text-align:center;
+  box-shadow:0 24px 64px rgba(10,10,18,.25);border:1px solid var(--border);
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal h3{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:10px}
+.modal p{color:var(--ink2);font-size:14px;line-height:1.65;margin-bottom:24px}
+.mbts{display:flex;gap:10px;justify-content:center}
+.mbts button{padding:11px 28px;border-radius:10px;font-size:14px;font-weight:700;
+  cursor:pointer;border:none;font-family:'Syne',sans-serif}
+.mcancel{background:var(--surface2);color:var(--ink2);border:1px solid var(--border)!important}
+.mconfirm{background:var(--accent);color:#fff}
+.mconfirm-ok{background:var(--ok);color:#fff}
+
+/* ══════════════════ RESULT ══════════════════ */
+#screen-result{align-items:center;justify-content:flex-start;padding:40px 16px;overflow-y:auto}
+.rcard{
+  background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  padding:44px 48px;max-width:560px;width:100%;
+  box-shadow:var(--shadow-lg);text-align:center;position:relative;z-index:1;
+  margin:0 auto;
+}
+.score-ring{
+  width:136px;height:136px;border-radius:50%;margin:0 auto 20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:6px solid var(--accent);color:var(--accent);
+}
+.score-ring.pass{border-color:var(--ok);color:var(--ok)}
+.score-ring.fail{border-color:var(--err);color:var(--err)}
+.score-pct{font-family:'Syne',sans-serif;font-size:36px;font-weight:800;line-height:1}
+.score-label{font-size:12px;font-weight:600;letter-spacing:2px;font-family:'IBM Plex Mono',monospace}
+.rstats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}
+.rstat{background:var(--sky);border-radius:12px;padding:16px 12px}
+.rstat .val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--accent)}
+.rstat.ok .val{color:var(--ok)}
+.rstat.err .val{color:var(--err)}
+.rstat .lbl{font-size:11px;color:var(--ink3);margin-top:4px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px}
+.result-info-row{
+  display:flex;flex-direction:column;gap:8px;
+  background:var(--surface2);border-radius:12px;padding:18px 20px;
+  margin:20px 0;font-size:13px;text-align:left;border:1px solid var(--border);
+}
+.result-info-row .row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+.result-info-row .row:last-child{border-bottom:none}
+.result-info-row .row .key{color:var(--ink3);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.5px;font-weight:600}
+.result-info-row .row .val{font-weight:600;color:var(--ink);font-size:13px}
+.drive-status{
+  margin:12px 0;padding:12px 18px;border-radius:10px;
+  font-size:13px;font-family:'IBM Plex Mono',monospace;
+}
+.drive-ok{background:var(--ok-bg);color:var(--ok2)}
+.drive-info{background:var(--sky);color:var(--ink2)}
+.drive-err{background:var(--err-bg);color:var(--err)}
+.darea{margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.darea button{
+  padding:11px 24px;border-radius:10px;font-size:13px;font-weight:700;
+  cursor:pointer;border:none;font-family:'Syne',sans-serif;transition:all .2s;
+}
+
+/* ══════════════════ TOAST ══════════════════ */
+.toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);
+  background:var(--err);color:#fff;padding:12px 28px;border-radius:12px;
+  font-weight:700;font-size:13px;z-index:2000;opacity:0;
+  transition:all .3s;white-space:nowrap;pointer-events:none;
+  font-family:'IBM Plex Mono',monospace;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.warn-toast{background:var(--warn)}
+
+/* ══════════════════ MODEL LOADING OVERLAY ══════════════════ */
+/* ── NEW v2.2: blocks exam start until SSD MobileNet loads ── */
+#model-loading-overlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(10,10,18,.82);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:18px;
+}
+#model-loading-overlay.hidden{display:none}
+.mlo-card{
+  background:var(--surface);border-radius:20px;padding:36px 44px;
+  text-align:center;max-width:420px;width:90%;
+  box-shadow:0 24px 64px rgba(0,0,0,.35);border:1px solid var(--border);
+}
+.mlo-card h3{font-family:'Syne',sans-serif;font-size:19px;font-weight:800;margin-bottom:8px}
+.mlo-card p{font-size:13px;color:var(--ink3);margin-bottom:20px;line-height:1.6}
+.mlo-progress{width:100%;height:6px;background:var(--sky);border-radius:6px;overflow:hidden;margin-bottom:14px}
+.mlo-bar{height:100%;background:linear-gradient(90deg,var(--accent),#5c7cfa);
+  border-radius:6px;width:0%;transition:width .4s ease;animation:mloGlow 1.5s infinite alternate}
+@keyframes mloGlow{0%{filter:brightness(1)}100%{filter:brightness(1.3)}}
+.mlo-steps{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3);
+  display:flex;flex-direction:column;gap:4px;text-align:left}
+.mlo-step{display:flex;align-items:center;gap:8px}
+.mlo-step .dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s}
+.mlo-step.done .dot{background:var(--ok)}
+.mlo-step.active .dot{background:var(--accent);animation:blink .6s infinite}
+.mlo-step.err .dot{background:var(--err)}
+
+/* ══════════════════ FACE DETECTION CANVAS ══════════════════ */
+/* ── NEW: thicker overlay, status label on canvas ── */
+#face-canvas{
+  position:absolute;top:0;left:0;width:340px;height:255px;
+  border-radius:14px;pointer-events:none;
+}
+/* Status label drawn directly on canvas — see JS */
+
+/* ── Detection status indicator strip ── */
+#face-detect-strip{
+  display:flex;align-items:center;gap:10px;justify-content:center;
+  margin-top:10px;flex-wrap:wrap;
+}
+.fds-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;
+  padding:3px 10px;border-radius:12px;letter-spacing:.5px;
+  background:var(--sky);color:var(--ink3);border:1px solid var(--sky2);transition:all .3s;
+}
+.fds-badge.ok{background:var(--ok-bg);color:var(--ok2);border-color:var(--ok)}
+.fds-badge.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.fds-badge.err{background:var(--err-bg);color:var(--err);border-color:var(--err)}
+
+/* ── Begin button lock state ── */
+#btn-begin:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+#btn-begin-reason{font-size:11px;color:var(--warn);font-family:'IBM Plex Mono',monospace;
+  margin-top:6px;text-align:center;min-height:16px;transition:all .3s}
+
+/* ── Live violation flash overlay on webcam ── */
+#face-violation-flash{
+  position:absolute;inset:0;border-radius:14px;pointer-events:none;
+  opacity:0;transition:opacity .15s;
+}
+#face-violation-flash.err{background:rgba(201,42,42,.25);opacity:1}
+#face-violation-flash.warn{background:rgba(230,119,0,.20);opacity:1}
+
+/* ── Mini proctor status in quiz header ── */
+#proctor-mini-status{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;
+  padding:3px 8px;border-radius:8px;
+  background:var(--ok-bg);color:var(--ok2);border:1px solid var(--ok);
+  transition:all .3s;white-space:nowrap;
+}
+#proctor-mini-status.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+#proctor-mini-status.err{background:var(--err-bg);color:var(--err);border-color:var(--err);animation:pulse .5s infinite}
+@media(max-width:700px){
+  .login-card{width:94%;padding:32px 24px}
+  .inst-card{padding:28px 20px}
+  .qbody{flex-direction:column}
+  .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)}
+  .qcard{padding:20px 16px}
+  .qtext{font-size:15px}
+  .rcard{padding:28px 16px}
+  .rstats{grid-template-columns:repeat(2,1fr)}
+}
+@keyframes saveProgress{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODEL LOADING OVERLAY — NEW v2.2
+     Shown while SSD MobileNet V1 + Landmark models load.
+     Hides automatically when both models are ready.
+     ═══════════════════════════════════════════════════════ -->
+<div id="model-loading-overlay" class="hidden">
+  <div class="mlo-card">
+    <div style="font-size:36px;margin-bottom:10px">🔬</div>
+    <h3>Loading Proctoring Engine</h3>
+    <p>Downloading face detection models. This takes a few seconds on first load. The exam cannot begin until models are ready.</p>
+    <div class="mlo-progress"><div class="mlo-bar" id="mlo-bar"></div></div>
+    <div class="mlo-steps">
+      <div class="mlo-step" id="mlo-step-net"><div class="dot"></div><span id="mlo-step-net-txt">SSD MobileNet V1 — waiting…</span></div>
+      <div class="mlo-step" id="mlo-step-lm"><div class="dot"></div><span id="mlo-step-lm-txt">Face Landmark 68 Net — waiting…</span></div>
+    </div>
+    <div id="mlo-error" style="display:none;margin-top:14px;font-size:12px;color:var(--warn);background:var(--warn-bg);padding:10px 14px;border-radius:8px;border-left:3px solid var(--warn)">
+      ⚠ Model download failed. Snapshot-only proctoring will be used. You may still proceed.
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════ LOGIN ══════════════════ -->
+<div class="screen active" id="screen-login">
+  <div class="login-wrap">
+    <div class="login-badge">📊 BDA Assessment Portal v2.1</div>
+    <div class="login-card">
+      <div class="login-icon">🎓</div>
+      <div class="login-title">Big Data Analytics</div>
+      <div class="login-sub">Secure Examination System · RVCE</div>
+      <div class="fg">
+        <label>Full Name</label>
+        <input type="text" id="inp-name" placeholder="e.g. Nikhil Kumar" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label>USN (University Seat Number)</label>
+        <input type="text" id="inp-usn" placeholder="e.g. 1RV21CS001" autocomplete="off" style="text-transform:uppercase">
+      </div>
+      <div class="fg">
+        <label>Email ID</label>
+        <input type="email" id="inp-email" placeholder="e.g. nikhil@example.com" autocomplete="off">
+      </div>
+      <button class="btn-login" onclick="doLogin()">Begin Examination →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ INSTRUCTIONS ══════════════════ -->
+<div class="screen" id="screen-instructions">
+  <div class="inst-card" style="position:relative;z-index:1">
+    <h2>📋 Examination Instructions</h2>
+    <p class="sub">Read carefully before proceeding. All violations are logged and affect your proctoring report.</p>
+    <ul class="ilist">
+      <li><span class="ic">⏱</span><div><strong>Duration:</strong> 75 minutes for 25 questions. Timer starts on "Begin Test".</div></li>
+      <li><span class="ic">📝</span><div><strong>Questions:</strong> 25 MCQs from 5 BDA modules. Order randomized per session.</div></li>
+      <li><span class="ic">🔄</span><div><strong>Navigation:</strong> Move freely, flag questions for review. Unanswered = 0 marks.</div></li>
+      <li><span class="ic">✅</span><div><strong>Marking:</strong> <b>+2</b> correct, <b>0</b> wrong/unanswered — no negative marking.</div></li>
+      <li><span class="ic">🚫</span><div><strong>Tab switching</strong> is monitored. 2 violations → auto-submission.</div></li>
+      <li><span class="ic">📋</span><div><strong>Copy/paste &amp; right-click</strong> are disabled during the exam.</div></li>
+      <li><span class="ic">📷</span><div><strong>Webcam:</strong> Active throughout. Snapshots every 30s. Proctoring rules below apply.</div></li>
+      <li><span class="ic">💾</span><div><strong>Results</strong> are saved as Excel to Google Drive. Only a summary is shown to you after submission.</div></li>
+    </ul>
+    <div class="note note-ok" style="margin-bottom:10px">
+      <div>
+        <b>📷 Webcam Proctoring Rules:</b><br>
+        • Only <b>one person</b> must be visible in front of the camera at all times.<br>
+        • Keep your <b>face clearly visible</b> and centred — do not turn away from the screen.<br>
+        • <b>Multiple people</b> in frame will trigger an immediate proctoring warning.<br>
+        • <b>Turning or rotating your face</b> away repeatedly (2 times) will trigger auto-submission.<br>
+        • Camera must remain active; disabling it mid-exam is flagged in your report.
+      </div>
+    </div>
+    <div class="note note-warn">⚠️ Switching tabs/windows triggers a warning. <b>After 2 warnings your exam is auto-submitted.</b></div>
+    <div class="center">
+      <button class="btn-proceed" onclick="goCameraCheck()">Proceed to Camera Check →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ CAMERA CHECK ══════════════════ -->
+<div class="screen" id="screen-camera">
+  <div class="cam-card">
+    <h2>📷 Identity &amp; Camera Verification</h2>
+    <p class="sub">Your webcam will be active throughout the exam for proctoring.</p>
+    <div class="cam-rules">
+      <ul>
+        <li>Sit alone — only you should be visible in the frame</li>
+        <li>Face the camera directly; keep face centered and well-lit</li>
+        <li>Do not turn away, cover your face, or let others enter the frame</li>
+        <li>Do not close or block the camera during the exam</li>
+      </ul>
+    </div>
+    <div class="cam-wrap">
+      <video id="webcam-preview" autoplay muted playsinline></video>
+      <canvas id="face-canvas"></canvas>
+      <!-- NEW v2.2: violation flash overlay -->
+      <div id="face-violation-flash"></div>
+      <div id="cam-overlay">
+        <div class="cam-corner cc-tl"></div>
+        <div class="cam-corner cc-tr"></div>
+        <div class="cam-corner cc-bl"></div>
+        <div class="cam-corner cc-br"></div>
+      </div>
+    </div>
+    <div class="cam-status-bar">
+      <div class="cam-dot" id="cam-dot"></div>
+      <span id="cam-status" style="font-size:12px;color:var(--ink3)">Requesting camera…</span>
+    </div>
+    <div id="face-status-pill">⏳ Loading face detector…</div>
+    <!-- NEW v2.2: per-violation counters visible during camera check -->
+    <div id="face-detect-strip">
+      <span class="fds-badge" id="fds-faces">👤 Faces: —</span>
+      <span class="fds-badge" id="fds-center">📐 Position: —</span>
+      <span class="fds-badge" id="fds-orient">👁 Orientation: —</span>
+    </div>
+    <div id="btn-begin-reason"></div>
+    <div class="snap-strip" id="snap-strip"></div>
+    <div class="snap-count" id="snap-count"></div>
+    <div class="cam-actions">
+      <button class="btn-proceed" id="btn-begin" onclick="startExam()">Begin Test →</button>
+    </div>
+    <p style="font-size:11px;color:var(--ink3);margin-top:16px">Camera denial is flagged. Exam still proceeds without live proctoring.</p>
+  </div>
+</div>
+
+<!-- ══════════════════ QUIZ ══════════════════ -->
+<div class="screen" id="screen-quiz">
+  <div class="qhdr">
+    <div class="qhdr-title"><span>📊</span> BDA Assessment</div>
+    <div class="qhdr-student" id="student-label"></div>
+    <!-- Mini live webcam in header -->
+    <div class="cam-mini" id="cam-mini-wrap">
+      <video id="webcam-mini" autoplay muted playsinline></video>
+      <div class="cam-rec"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="proctor-mini-status">✅ OK</span>
+      <span class="warn-badge" id="warn-label">⚠ 0/2</span>
+      <div class="timer" id="timer-box">75:00</div>
+    </div>
+  </div>
+  <div class="qbody">
+    <div class="sidebar">
+      <h4>Question Palette</h4>
+      <div class="qgrid" id="q-palette"></div>
+      <div class="legend">
+        <div class="legend-item"><div class="ldot" style="background:var(--surface);border:1.5px solid var(--border)"></div>Not visited</div>
+        <div class="legend-item"><div class="ldot" style="background:var(--accent)"></div>Current</div>
+        <div class="legend-item"><div class="ldot" style="background:var(--ok-bg);border:1.5px solid var(--ok)"></div>Answered</div>
+        <div class="legend-item"><div class="ldot" style="background:var(--warn-bg);border:1.5px solid var(--warn)"></div>Flagged</div>
+      </div>
+      <div class="progress-box" id="progress-box"></div>
+      <div class="proctor-box" id="proctor-box">📷 Proctoring active</div>
+    </div>
+    <div class="main">
+      <div class="qcard" id="q-card"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ RESULT ══════════════════ -->
+<div class="screen" id="screen-result">
+  <div class="rcard" id="result-card"></div>
+</div>
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+<div class="overlay" id="modal-submit">
+  <div class="modal">
+    <h3>🔒 Submit Examination?</h3>
+    <p>You are about to submit your responses. This action <b>cannot be undone</b>. Unanswered questions score 0.</p>
+    <div class="mbts">
+      <button class="mcancel" onclick="closeModal('modal-submit')">Cancel</button>
+      <button class="mconfirm-ok" onclick="finalSubmit()">Submit Now ✓</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-tabwarn">
+  <div class="modal">
+    <h3 style="color:var(--err)">⚠️ Tab Switch Detected!</h3>
+    <p id="tabwarn-msg">You left the exam tab. Warning <b>1 of 2</b>. A second violation auto-submits.</p>
+    <div class="mbts">
+      <button class="mconfirm" onclick="closeModal('modal-tabwarn')">Return to Exam</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-procwarn">
+  <div class="modal">
+    <h3 style="color:var(--warn)">📷 Proctoring Alert</h3>
+    <p id="procwarn-msg">Proctoring violation detected. Please return to the correct position.</p>
+    <div class="mbts">
+      <button class="mconfirm" onclick="closeModal('modal-procwarn')">Understood</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-saving">
+  <div class="modal">
+    <h3>💾 Saving Result…</h3>
+    <p>Uploading your result to Google Drive. Please wait…</p>
+    <div style="margin-top:8px">
+      <div style="width:100%;height:4px;background:var(--sky);border-radius:4px;overflow:hidden">
+        <div style="height:100%;background:var(--accent);animation:saveProgress 2s linear infinite;border-radius:4px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════
+const API_BASE = 'http://localhost:3000'; // Change to your deployed server URL
+
+// ══════════════════════════════════════
+//  QUESTION BANK  (25 Qs, 5 modules × 5)
+// ══════════════════════════════════════
+const QUESTION_BANK = [
+  {id:1,module:"Big Data Fundamentals",
+    text:"An e-commerce company stores 500 TB of clickstream data with 200+ attributes per event. Traditional RDBMS fail mainly because:",
+    opts:["A. SQL syntax is incompatible","B. Vertical scaling hits hardware limits and schema rigidity prevents unstructured ingestion","C. RDBMS cannot run on Linux","D. Column-level encryption is unavailable"],
+    correct:1,explanation:"Big Data's Volume+Variety overwhelms RDBMS vertical-scaling ceilings and strict schemas."},
+  {id:2,module:"Big Data Fundamentals",
+    text:"Which V of Big Data specifically refers to the degree of trust you can assign to each data point in a healthcare dataset with missing and conflicting records?",
+    opts:["A. Velocity","B. Volume","C. Veracity","D. Variability"],
+    correct:2,explanation:"Veracity describes data quality, accuracy, and trustworthiness."},
+  {id:3,module:"Big Data Fundamentals",
+    text:"Lambda Architecture separates processing into batch and speed layers primarily to:",
+    opts:["A. Reduce hardware costs","B. Achieve both low-latency real-time views and accurate historical views simultaneously","C. Eliminate the need for a serving layer","D. Store data only in HDFS"],
+    correct:1,explanation:"Lambda's dual-layer design balances latency (speed) vs accuracy (batch)."},
+  {id:4,module:"Big Data Fundamentals",
+    text:"A social media platform sees spikes of 10 M posts/sec during live events. Which Big Data characteristic is primarily challenged?",
+    opts:["A. Volume","B. Variety","C. Velocity","D. Value"],
+    correct:2,explanation:"Velocity concerns the speed at which data arrives and must be processed."},
+  {id:5,module:"Big Data Fundamentals",
+    text:"Kappa Architecture improves upon Lambda by:",
+    opts:["A. Removing the speed layer","B. Removing the batch layer and reprocessing all data through a single streaming pipeline","C. Adding a governance layer","D. Using only SQL databases"],
+    correct:1,explanation:"Kappa uses a single streaming engine for both real-time and reprocessing, simplifying Lambda."},
+  {id:6,module:"Hadoop & HDFS",
+    text:"HDFS stores file blocks across DataNodes with a default replication factor of 3. If one DataNode crashes, the NameNode triggers:",
+    opts:["A. Immediate cluster shutdown","B. Under-replication detection and schedules re-replication on healthy nodes","C. Read-only mode for all files","D. Secondary NameNode promotion"],
+    correct:1,explanation:"NameNode detects under-replication via heartbeat loss and re-replicates to restore factor=3."},
+  {id:7,module:"Hadoop & HDFS",
+    text:"The HDFS NameNode is a Single Point of Failure. Hadoop 2.x addresses this through:",
+    opts:["A. RAID on the NameNode disk","B. Automatic NameNode sharding","C. Active-Standby NameNode with Zookeeper-based failover and a shared edit log","D. Dual DataNode architecture"],
+    correct:2,explanation:"Hadoop HA uses Zookeeper for automatic failover between active and standby NameNodes."},
+  {id:8,module:"Hadoop & HDFS",
+    text:"A 5 GB file is stored in HDFS with a block size of 128 MB. Approximately how many blocks are created (ignoring metadata)?",
+    opts:["A. 5","B. 20","C. 40","D. 80"],
+    correct:2,explanation:"5120 MB ÷ 128 MB ≈ 40 blocks."},
+  {id:9,module:"Hadoop & HDFS",
+    text:"YARN's ResourceManager and NodeManager relationship is best described as:",
+    opts:["A. RM stores data; NM computes","B. RM manages cluster resources globally; NM manages per-node container lifecycle","C. NM replaces the NameNode in Hadoop 3","D. RM handles HDFS replication"],
+    correct:1,explanation:"YARN separates resource management (RM) from per-node execution management (NM)."},
+  {id:10,module:"Hadoop & HDFS",
+    text:"An analyst notices that a MapReduce job reads data from HDFS at half the expected throughput. The MOST likely cause is:",
+    opts:["A. Too many reducers","B. Data skew causing mapper imbalance and rack-locality miss due to DataNode failures","C. Incorrect input format class","D. Python used instead of Java"],
+    correct:1,explanation:"Rack-locality misses force cross-rack network transfers, and mapper skew causes idle slots."},
+  {id:11,module:"MapReduce",
+    text:"In MapReduce, the Combiner is best described as:",
+    opts:["A. A reducer that runs on the master node","B. A local aggregation step on the mapper side to reduce shuffle data volume","C. A secondary sort mechanism","D. An HDFS write accelerator"],
+    correct:1,explanation:"Combiners mini-reduce mapper output locally, shrinking data transferred during shuffle."},
+  {id:12,module:"MapReduce",
+    text:"The shuffle and sort phase in MapReduce is responsible for:",
+    opts:["A. Writing final output to HDFS","B. Partitioning, sorting by key, and transferring mapper outputs to the correct reducers","C. Splitting input files into splits","D. Spawning the ApplicationMaster"],
+    correct:1,explanation:"Shuffle groups all values for each key and transfers them to the assigned reducer."},
+  {id:13,module:"MapReduce",
+    text:"A MapReduce word-count job on 10 GB of text produces 200 MB of intermediate data. A Combiner is added. The MOST direct benefit is:",
+    opts:["A. Fewer map tasks required","B. Significantly reduced network I/O during shuffle phase","C. Smaller HDFS block size","D. Increased reducer parallelism"],
+    correct:1,explanation:"Combiners reduce intermediate data size before shuffle, lowering network I/O."},
+  {id:14,module:"MapReduce",
+    text:"Secondary sort in MapReduce is used to:",
+    opts:["A. Sort final HDFS output","B. Control the order in which values arrive at the reducer for a given key using a composite key","C. Add a second pass of mapping","D. Compress reducer output"],
+    correct:1,explanation:"Secondary sort constructs composite keys to order values within a reducer key group."},
+  {id:15,module:"MapReduce",
+    text:"A MapReduce job's reduce phase is extremely slow while mapper utilisation is 100%. The BEST optimization is:",
+    opts:["A. Reduce the block size","B. Investigate key skew and use a custom partitioner or salting to distribute load evenly","C. Add more NameNodes","D. Use smaller input splits"],
+    correct:1,explanation:"Data skew sends too many values to one reducer; salting/custom partitioners balance load."},
+  {id:16,module:"NoSQL Databases",
+    text:"According to CAP theorem, in the presence of a network partition, a distributed database must choose between:",
+    opts:["A. Consistency and Durability","B. Availability and Partition Tolerance","C. Consistency and Availability","D. Latency and Throughput"],
+    correct:2,explanation:"CAP: during a partition, you can guarantee C (consistent reads) OR A (always respond), not both."},
+  {id:17,module:"NoSQL Databases",
+    text:"HBase uses Log-Structured Merge Trees (LSM-Trees). The compaction process is necessary to:",
+    opts:["A. Increase replication factor","B. Merge accumulated HFiles, reclaim space from deleted/updated rows, and improve read performance","C. Sync data to HDFS NameNode","D. Convert column families to row keys"],
+    correct:1,explanation:"HBase compaction merges SSTables (HFiles) to reduce read amplification and reclaim space."},
+  {id:18,module:"NoSQL Databases",
+    text:"Cassandra's consistency level QUORUM in a cluster with replication factor RF=5 requires acknowledgement from:",
+    opts:["A. 1 node","B. 2 nodes","C. 3 nodes","D. 5 nodes"],
+    correct:2,explanation:"QUORUM = floor(RF/2)+1 = floor(5/2)+1 = 3 nodes must respond."},
+  {id:19,module:"NoSQL Databases",
+    text:"MongoDB's aggregation pipeline stage $lookup is equivalent to which SQL operation?",
+    opts:["A. GROUP BY","B. LEFT OUTER JOIN","C. UNION ALL","D. HAVING"],
+    correct:1,explanation:"$lookup performs a left outer join between two collections."},
+  {id:20,module:"NoSQL Databases",
+    text:"A sensor network writes 50,000 rows/sec with time-series keys like sensor_id+timestamp. The MOST appropriate NoSQL model is:",
+    opts:["A. Document store (MongoDB)","B. Graph database (Neo4j)","C. Wide-column store (Cassandra) with composite partition key","D. Key-value cache (Redis) as primary store"],
+    correct:2,explanation:"Cassandra's wide-column model with composite keys handles high-velocity time-series writes optimally."},
+  {id:21,module:"Spark & Advanced Analytics",
+    text:"Spark's RDD lineage (DAG) is used to:",
+    opts:["A. Schedule YARN containers","B. Rebuild lost partitions by recomputing from the original source without HDFS re-read","C. Serialize Java objects for shuffle","D. Manage Spark SQL metadata"],
+    correct:1,explanation:"RDD lineage tracks transformations; lost partitions are recomputed along the DAG—no checkpointing needed."},
+  {id:22,module:"Spark & Advanced Analytics",
+    text:"Which Spark transformation is WIDE (requires shuffle)?",
+    opts:["A. map()","B. filter()","C. flatMap()","D. groupByKey()"],
+    correct:3,explanation:"groupByKey is a wide transformation; all others listed are narrow (no shuffle required)."},
+  {id:23,module:"Spark & Advanced Analytics",
+    text:"In Spark Structured Streaming, the 'watermark' concept is used to:",
+    opts:["A. Control executor memory allocation","B. Handle late-arriving data by defining how late an event can be before it's dropped from aggregations","C. Set the streaming batch interval","D. Authenticate Kafka brokers"],
+    correct:1,explanation:"Watermarks define a late-data threshold; events beyond it are discarded to bound state size."},
+  {id:24,module:"Spark & Advanced Analytics",
+    text:"MLlib's ALS (Alternating Least Squares) algorithm is primarily used for:",
+    opts:["A. Text classification","B. Time-series forecasting","C. Collaborative filtering / recommendation systems","D. Graph shortest path computation"],
+    correct:2,explanation:"ALS factorises user-item matrices for collaborative filtering—classic recommender systems."},
+  {id:25,module:"Spark & Advanced Analytics",
+    text:"A Spark job runs slower than expected. The Spark UI shows one task taking 10x longer than others in the same stage. This is MOST likely caused by:",
+    opts:["A. Insufficient driver memory","B. Data skew causing one partition to hold disproportionately large data","C. Wrong Spark version","D. Too many executors"],
+    correct:1,explanation:"Partition skew causes a single task to process far more records, becoming a straggler."},
+];
+
+// ══════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════
+const S = {
+  name:'', usn:'', email:'',
+  questions:[], current:0,
+  timeLeft:75*60,
+  warnings:0,
+  timerH:null, snapH:null, faceH:null,
+  snapshots:[], stream:null,
+  startTime:null, submitted:false,
+  // ── proctoring counters ──────────────────────────────────────
+  faceApiReady:false,
+  noFaceCount:0,           // consecutive no-face detections
+  noFaceWarnings:0,        // warnings issued for no-face
+  multipleFaceCount:0,     // consecutive multi-face detections
+  multipleFaceWarnings:0,  // warnings issued for multi-face
+  faceAwayCount:0,         // look-away (head rotation) detections
+  faceAwayWarnings:0,      // warnings issued for look-away
+  proctoringLog:[],
+  cameraStreamLost:0,      // counts stream-stop events
+  lastFaceArea:0,          // for face-distance heuristic
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  FACE DETECTION CONFIG
+//  Using SSD MobileNet V1 (more accurate than TinyFaceDetector)
+//  + FaceLandmark68Net for head orientation detection
+// ═══════════════════════════════════════════════════════════════
+const FACE_API_MODELS_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+const SSD_OPTIONS = new (function SSDOptions(){ // lazy init after models load
+  this._opts = null;
+  this.get = () => {
+    if(!this._opts && typeof faceapi !== 'undefined') {
+      this._opts = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 });
+    }
+    return this._opts;
+  };
+})();
+
+// ── State for model loading ──
+let faceApiLoaded = false;
+let landmarksLoaded = false;
+let modelLoadAttempted = false;
+
+// ─────────────────────────────────────────────────────────────
+//  loadModels() — NEW v2.2
+//  Loads SSD MobileNet V1 + FaceLandmark68Net.
+//  Shows progress overlay. Blocks exam start until complete.
+//  Degrades gracefully if CDN is unavailable.
+// ─────────────────────────────────────────────────────────────
+async function loadModels() {
+  if (modelLoadAttempted) return;
+  modelLoadAttempted = true;
+
+  // Show the overlay
+  const overlay = document.getElementById('model-loading-overlay');
+  const bar = document.getElementById('mlo-bar');
+  const stepNet = document.getElementById('mlo-step-net');
+  const stepNetTxt = document.getElementById('mlo-step-net-txt');
+  const stepLm = document.getElementById('mlo-step-lm');
+  const stepLmTxt = document.getElementById('mlo-step-lm-txt');
+  overlay.classList.remove('hidden');
+
+  function setStep(el, txtEl, state, msg) {
+    el.className = 'mlo-step ' + state;
+    txtEl.textContent = msg;
+  }
+
+  if (typeof faceapi === 'undefined') {
+    document.getElementById('mlo-error').style.display = 'block';
+    bar.style.width = '100%';
+    overlay.classList.add('hidden');
+    updateFacePill('warn', '⚠ face-api.js unavailable — snapshot only');
+    unlockBeginButton();
+    return;
+  }
+
+  // ── Step 1: SSD MobileNet V1 ──
+  setStep(stepNet, stepNetTxt, 'active', 'SSD MobileNet V1 — downloading…');
+  bar.style.width = '15%';
+  try {
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(FACE_API_MODELS_URL);
+    faceApiLoaded = true;
+    // Initialise SSD options now that the model is loaded
+    SSD_OPTIONS._opts = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 });
+    setStep(stepNet, stepNetTxt, 'done', 'SSD MobileNet V1 — ✓ loaded');
+    bar.style.width = '55%';
+  } catch(e) {
+    setStep(stepNet, stepNetTxt, 'err', 'SSD MobileNet V1 — ✗ failed (' + e.message + ')');
+    bar.style.width = '55%';
+    console.warn('[FaceAPI] SSD model load failed:', e.message);
+  }
+
+  // ── Step 2: Face Landmark 68 Net ──
+  setStep(stepLm, stepLmTxt, 'active', 'Face Landmark 68 Net — downloading…');
+  bar.style.width = '70%';
+  try {
+    await faceapi.nets.faceLandmark68Net.loadFromUri(FACE_API_MODELS_URL);
+    landmarksLoaded = true;
+    setStep(stepLm, stepLmTxt, 'done', 'Face Landmark 68 Net — ✓ loaded');
+    bar.style.width = '100%';
+  } catch(e) {
+    setStep(stepLm, stepLmTxt, 'err', 'Face Landmark 68 Net — ✗ failed (rotation detection limited)');
+    bar.style.width = '100%';
+    console.warn('[FaceAPI] Landmark model load failed:', e.message);
+  }
+
+  // Brief pause so user can see 100% bar
+  await new Promise(r => setTimeout(r, 500));
+  overlay.classList.add('hidden');
+
+  if (!faceApiLoaded) {
+    document.getElementById('mlo-error').style.display = 'block';
+    updateFacePill('warn', '⚠ Detector unavailable — snapshot mode only');
+  } else {
+    updateFacePill('ok', '✅ Face detector ready (SSD MobileNet V1)');
+  }
+  unlockBeginButton();
+}
+
+// ── Locks / unlocks the Begin Test button ──
+function lockBeginButton(reason) {
+  const btn = document.getElementById('btn-begin');
+  const reasonEl = document.getElementById('btn-begin-reason');
+  if(btn) btn.disabled = true;
+  if(reasonEl && reason) reasonEl.textContent = reason;
+}
+function unlockBeginButton() {
+  const btn = document.getElementById('btn-begin');
+  const reasonEl = document.getElementById('btn-begin-reason');
+  if(btn) btn.disabled = false;
+  if(reasonEl) reasonEl.textContent = '';
+}
+
+function updateFacePill(state, text) {
+  const pill = document.getElementById('face-status-pill');
+  if (!pill) return;
+  pill.textContent = text;
+  pill.className = state;
+}
+
+// ══════════════════════════════════════
+//  LOGIN — Name + USN + Email
+// ══════════════════════════════════════
+function doLogin(){
+  const name  = document.getElementById('inp-name').value.trim();
+  const usn   = document.getElementById('inp-usn').value.trim().toUpperCase();
+  const email = document.getElementById('inp-email').value.trim().toLowerCase();
+  if(!name)  return toast('Please enter your full name.');
+  if(!usn)   return toast('Please enter your USN.');
+  if(!email) return toast('Please enter your email address.');
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if(!emailOk) return toast('Please enter a valid email address.');
+
+  // One-time attempt check (frontend guard)
+  if(localStorage.getItem('attempted_' + usn)) {
+    return toast('You have already attempted this exam. Multiple attempts are not allowed.', 'err');
+  }
+
+  if(sessionStorage.getItem('bda_session')) return toast('Session already active. Refresh to restart.');
+  sessionStorage.setItem('bda_session','1');
+  S.name = name; S.usn = usn; S.email = email;
+  show('screen-instructions');
+}
+
+// ══════════════════════════════════════
+//  CAMERA
+// ══════════════════════════════════════
+function goCameraCheck(){
+  show('screen-camera');
+  lockBeginButton('Loading proctoring models…');
+  startCamera();
+  loadModels(); // upgraded: SSD + Landmarks
+}
+
+async function startCamera(){
+  const statusEl = document.getElementById('cam-status');
+  const dot = document.getElementById('cam-dot');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ ideal:640 }, height:{ ideal:480 }, facingMode:'user', frameRate:{ ideal:15 } }
+    });
+    S.stream = stream;
+    const vid = document.getElementById('webcam-preview');
+    vid.srcObject = stream;
+    await new Promise(r => { vid.onloadedmetadata = r; });
+    // Sync canvas dimensions to actual video feed
+    const canvas = document.getElementById('face-canvas');
+    canvas.width  = vid.videoWidth  || 640;
+    canvas.height = vid.videoHeight || 480;
+    statusEl.textContent = '✅ Camera active — identity verified.';
+    statusEl.style.color = 'var(--ok)';
+    dot.classList.add('active');
+
+    // Monitor for unexpected stream end (camera unplugged / disabled)
+    stream.getVideoTracks()[0].onended = onCameraStreamEnded;
+
+    // Start camera-screen detection loop (runs at 1.5s interval)
+    startCameraScreenDetection();
+  } catch(e) {
+    statusEl.textContent = '⚠️ Camera denied — flagged in proctoring report.';
+    statusEl.style.color = 'var(--warn)';
+    dot.classList.add('warn');
+    // Even without camera, allow proceeding after models load
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  startCameraScreenDetection() — NEW v2.2
+//  Runs on the camera-check screen every 1.5 s.
+//  Uses SSD MobileNet V1 + optional landmarks.
+//  Draws green/red bounding boxes and updates status badges.
+//  Does NOT enforce violations — preview only.
+// ─────────────────────────────────────────────────────────────
+let cameraDetectionHandle = null;
+function startCameraScreenDetection(){
+  if(cameraDetectionHandle) return;
+  cameraDetectionHandle = setInterval(async () => {
+    if(!faceApiLoaded || !S.stream) return;
+    const vid = document.getElementById('webcam-preview');
+    const canvas = document.getElementById('face-canvas');
+    if(!vid || !canvas || vid.readyState < 2) return;
+    try {
+      let detections;
+      if(landmarksLoaded) {
+        detections = await faceapi
+          .detectAllFaces(vid, SSD_OPTIONS.get())
+          .withFaceLandmarks();
+      } else {
+        detections = await faceapi.detectAllFaces(vid, SSD_OPTIONS.get());
+      }
+
+      // ── Draw overlays on canvas ──
+      drawFaceOverlays(canvas, vid, detections, false /* no violation labels in preview */);
+
+      // ── Update detection strip badges ──
+      const faceCount = detections.length;
+      const facesBadge   = document.getElementById('fds-faces');
+      const centerBadge  = document.getElementById('fds-center');
+      const orientBadge  = document.getElementById('fds-orient');
+
+      // Faces count badge
+      if(faceCount === 0){
+        setBadge(facesBadge, 'warn', '⚠ No face detected');
+        setBadge(centerBadge, '', '📐 Position: —');
+        setBadge(orientBadge, '', '👁 Orientation: —');
+        updateFacePill('warn', '⚠ No face detected — adjust position');
+      } else if(faceCount > 1){
+        setBadge(facesBadge, 'err', `⛔ ${faceCount} faces detected`);
+        setBadge(centerBadge, 'err', '📐 Move others away');
+        setBadge(orientBadge, '', '👁 Orientation: —');
+        updateFacePill('err', `⛔ ${faceCount} faces in frame — only YOU should be visible`);
+      } else {
+        setBadge(facesBadge, 'ok', '✅ 1 face');
+        // Centering check
+        const det = detections[0];
+        const box = det.detection ? det.detection.box : det.box;
+        const cx = box.x + box.width/2;
+        const relX = cx / (vid.videoWidth || canvas.width);
+        const relY = (box.y + box.height/2) / (vid.videoHeight || canvas.height);
+        const centered = relX > 0.2 && relX < 0.8 && relY > 0.1 && relY < 0.85;
+        setBadge(centerBadge, centered ? 'ok' : 'warn', centered ? '📐 Centered ✓' : '📐 Adjust position');
+
+        // Head orientation using landmarks (if available)
+        if(landmarksLoaded && det.landmarks) {
+          const orientOk = estimateHeadOrientation(det.landmarks);
+          setBadge(orientBadge, orientOk ? 'ok' : 'warn', orientOk ? '👁 Facing screen ✓' : '⚠ Look at screen');
+          const allOk = centered && orientOk;
+          updateFacePill(allOk ? 'ok' : 'warn', allOk ? '✅ Position OK — ready to start' : '⚠ Adjust face position');
+        } else {
+          setBadge(orientBadge, 'ok', '👁 Orientation: N/A');
+          updateFacePill(centered ? 'ok' : 'warn', centered ? '✅ Face detected — ready' : '⚠ Center your face');
+        }
+      }
+    } catch(e){ /* silent fail */ }
+  }, 1500);
+}
+
+// ── setBadge helper ──
+function setBadge(el, state, text) {
+  if(!el) return;
+  el.textContent = text;
+  el.className = 'fds-badge' + (state ? ' '+state : '');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  drawFaceOverlays() — NEW v2.2
+//  Draws bounding boxes + status text on the canvas.
+//  color: green = OK, red = violation, orange = warning
+//  examMode: true → shows violation text on canvas
+// ─────────────────────────────────────────────────────────────
+function drawFaceOverlays(canvas, vid, detections, examMode) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const scaleX = W / (vid.videoWidth || W);
+  const scaleY = H / (vid.videoHeight || H);
+
+  const faceCount = detections.length;
+
+  detections.forEach((det, i) => {
+    const box = det.detection ? det.detection.box : det.box;
+    const bx = box.x * scaleX;
+    const by = box.y * scaleY;
+    const bw = box.width * scaleX;
+    const bh = box.height * scaleY;
+
+    // Determine color
+    let color = '#0f9b58'; // green = ok
+    if(faceCount > 1) color = '#c92a2a';       // red = multiple faces
+    else if(faceCount === 1 && examMode) {
+      // In exam mode, check orientation
+      if(det.landmarks && !estimateHeadOrientation(det.landmarks)) color = '#e67700';
+    }
+
+    // Draw box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 4) : ctx.rect(bx, by, bw, bh);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Corner accents
+    const cs = 12;
+    ctx.lineWidth = 3;
+    [
+      [bx, by, cs, 0, cs, 0],            // TL
+      [bx+bw, by, -cs, 0, -cs, 0],       // TR
+      [bx, by+bh, cs, 0, -cs, 0],        // BL (inverted)
+      [bx+bw, by+bh, -cs, 0, cs, 0],     // BR
+    ].forEach(([x, y, dx]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y + (y > bh/2 ? -cs : cs));
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + dx, y);
+      ctx.stroke();
+    });
+
+    // Status label
+    const label = faceCount > 1
+      ? `Face ${i+1} — VIOLATION`
+      : (color === '#e67700' ? 'Look at screen' : 'Face OK');
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px IBM Plex Mono, monospace';
+    ctx.shadowColor = 'rgba(0,0,0,.5)';
+    ctx.shadowBlur = 4;
+    const labelY = by > 18 ? by - 6 : by + bh + 14;
+    ctx.fillText(label, bx, labelY);
+    ctx.shadowBlur = 0;
+  });
+
+  // No face label
+  if(faceCount === 0 && examMode) {
+    ctx.fillStyle = 'rgba(201,42,42,.75)';
+    ctx.fillRect(0, H/2 - 20, W, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px IBM Plex Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('NO FACE DETECTED', W/2, H/2 + 5);
+    ctx.textAlign = 'left';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  estimateHeadOrientation() — NEW v2.2
+//  Uses facial landmarks to estimate yaw (left-right rotation).
+//  Returns true if face is roughly facing the camera.
+//  Landmark indices (68-point model):
+//    Left eye outer: 36, inner: 39 | Right eye inner: 42, outer: 45
+//    Nose tip: 30 | Left mouth: 48 | Right mouth: 54
+// ─────────────────────────────────────────────────────────────
+function estimateHeadOrientation(landmarks) {
+  try {
+    const pts = landmarks.positions;
+    if(!pts || pts.length < 68) return true; // can't determine → assume ok
+
+    const leftEyeOuter  = pts[36];
+    const leftEyeInner  = pts[39];
+    const rightEyeInner = pts[42];
+    const rightEyeOuter = pts[45];
+    const noseTip       = pts[30];
+
+    // Eye midpoints
+    const leftEyeMid  = { x: (leftEyeOuter.x  + leftEyeInner.x)  / 2 };
+    const rightEyeMid = { x: (rightEyeInner.x + rightEyeOuter.x) / 2 };
+    const eyeCenterX  = (leftEyeMid.x + rightEyeMid.x) / 2;
+
+    // Nose deviation from eye-center (yaw heuristic)
+    const eyeSpan  = Math.abs(rightEyeOuter.x - leftEyeOuter.x);
+    const noseDeviation = Math.abs(noseTip.x - eyeCenterX) / (eyeSpan || 1);
+
+    // If nose deviates more than 35% of eye span → user is turned away
+    const yawOk = noseDeviation < 0.35;
+
+    // Left-right eye width symmetry (another yaw indicator)
+    const leftEyeWidth  = Math.abs(leftEyeInner.x  - leftEyeOuter.x);
+    const rightEyeWidth = Math.abs(rightEyeOuter.x - rightEyeInner.x);
+    const eyeSymmetry   = eyeSpan > 0
+      ? Math.min(leftEyeWidth, rightEyeWidth) / Math.max(leftEyeWidth, rightEyeWidth)
+      : 1;
+    // Low symmetry (< 0.35) means one eye is much narrower → strong yaw
+    const symmetryOk = eyeSymmetry > 0.35;
+
+    return yawOk && symmetryOk;
+  } catch(e) {
+    return true; // on error, don't penalise
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  flashViolation() — NEW v2.2
+//  Briefly flashes the webcam border red/orange on violation.
+// ─────────────────────────────────────────────────────────────
+function flashViolation(type) {
+  const fl = document.getElementById('face-violation-flash');
+  if(!fl) return;
+  fl.className = type === 'err' ? 'err' : 'warn';
+  setTimeout(() => { fl.className = ''; }, 600);
+}
+
+// ══════════════════════════════════════
+//  START EXAM
+// ══════════════════════════════════════
+function startExam(){
+  // Stop camera screen detection
+  if(cameraDetectionHandle){ clearInterval(cameraDetectionHandle); cameraDetectionHandle=null; }
+  // Clear camera-screen canvas
+  const previewCanvas = document.getElementById('face-canvas');
+  if(previewCanvas) previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width,previewCanvas.height);
+
+  // Robust Fisher-Yates shuffle using crypto random if available
+  const shuffled = cryptoShuffle([...QUESTION_BANK]);
+  S.questions = shuffled.map(q => ({
+    q,
+    optOrder: cryptoShuffle([0,1,2,3]),
+    userAnswer:-1,
+    flagged:false
+  }));
+  S.startTime = Date.now();
+  show('screen-quiz');
+  document.getElementById('student-label').textContent = `${S.name} · ${S.usn}`;
+
+  if(S.stream){
+    const mini = document.getElementById('webcam-mini');
+    mini.srcObject = S.stream;
+    // Monitor stream end during exam
+    S.stream.getVideoTracks()[0].onended = onCameraStreamEnded;
+  } else {
+    document.getElementById('cam-mini-wrap').style.display='none';
+  }
+
+  buildPalette();
+  renderQ(0);
+  startTimer();
+  startTabWatch();
+  if(S.stream) startSnaps();
+  if(S.stream && faceApiLoaded) startExamFaceDetection();
+  document.addEventListener('contextmenu', e=>e.preventDefault());
+  document.addEventListener('copy', e=>e.preventDefault());
+  document.addEventListener('cut', e=>e.preventDefault());
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EXAM-TIME FACE DETECTION — NEW v2.2
+//  Runs every 2 seconds during the exam.
+//  Uses SSD MobileNet V1 + FaceLandmark68Net.
+//
+//  Violations tracked (all reset after warning, auto-submit at 2):
+//    noFaceCount          → "No face detected"
+//    multipleFaceCount    → "Multiple faces"
+//    faceAwayCount        → "Face turned away" (landmark-based yaw)
+//
+//  Visual feedback:
+//    - Bounding box: green (OK), orange (look-away), red (multi/no face)
+//    - proctor-mini-status badge in header
+//    - Flash overlay on violation
+//    - Proctoring log entry on every check
+// ═══════════════════════════════════════════════════════════════
+
+// ── Hidden canvas for mini-video detection (not visible to user) ──
+let examDetCanvas = null;
+
+function getExamCanvas() {
+  if(!examDetCanvas) {
+    examDetCanvas = document.createElement('canvas');
+    examDetCanvas.width  = 320;
+    examDetCanvas.height = 240;
+  }
+  return examDetCanvas;
+}
+
+function startExamFaceDetection(){
+  S.faceH = setInterval(runExamFaceCheck, 2000);
+  // run once immediately
+  runExamFaceCheck();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  runExamFaceCheck() — core detection + enforcement
+// ─────────────────────────────────────────────────────────────
+async function runExamFaceCheck() {
+  if(S.submitted || !faceApiLoaded || !S.stream) return;
+  const vid = document.getElementById('webcam-mini');
+  if(!vid || vid.readyState < 2) return;
+
+  const now = new Date().toISOString();
+  let detections = [];
+
+  try {
+    if(landmarksLoaded) {
+      detections = await faceapi
+        .detectAllFaces(vid, SSD_OPTIONS.get())
+        .withFaceLandmarks();
+    } else {
+      detections = await faceapi.detectAllFaces(vid, SSD_OPTIONS.get());
+    }
+  } catch(e) {
+    console.warn('[FaceDetect] Detection error:', e.message);
+    return;
+  }
+
+  // ── checkFaceConditions ──
+  checkFaceConditions(detections, now);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  checkFaceConditions() — NEW v2.2
+//  Enforces all violation rules, updates UI, logs events.
+// ─────────────────────────────────────────────────────────────
+function checkFaceConditions(detections, now) {
+  const faceCount = detections.length;
+
+  // ── CASE 1: No face detected ──
+  if(faceCount === 0) {
+    S.noFaceCount++;
+    S.proctoringLog.push({ time:now, event:'no_face', count:S.noFaceCount });
+    updateProctorBox(`⚠ No face detected (${S.noFaceCount}/2)`, 'warn');
+    updateMiniStatus('⚠ No Face', 'warn');
+    flashViolation('warn');
+
+    if(S.noFaceCount >= 2) {
+      S.noFaceWarnings++;
+      if(S.noFaceWarnings >= 2) {
+        finalSubmit(true, 'face_turned_away');
+        return;
+      }
+      S.noFaceCount = 0; // reset consecutive count after issuing warning
+      triggerProcWarn(
+        `⚠ Your face is not visible in the camera.<br>` +
+        `This is proctoring violation <b>${S.noFaceWarnings}/2</b>.<br>` +
+        `A second violation will <b>auto-submit</b> your exam.`
+      );
+    }
+    return;
+  }
+
+  // ── CASE 2: Multiple faces ──
+  if(faceCount > 1) {
+    S.multipleFaceCount++;
+    S.proctoringLog.push({ time:now, event:'multiple_faces', count:faceCount, consecutive:S.multipleFaceCount });
+    updateProctorBox(`⛔ ${faceCount} faces detected! (${S.multipleFaceCount}/2)`, 'err');
+    updateMiniStatus(`⛔ ${faceCount} Faces`, 'err');
+    flashViolation('err');
+
+    if(S.multipleFaceCount >= 2) {
+      S.multipleFaceWarnings++;
+      if(S.multipleFaceWarnings >= 2) {
+        finalSubmit(true, 'multiple_faces');
+        return;
+      }
+      S.multipleFaceCount = 0;
+      triggerProcWarn(
+        `⛔ <b>${faceCount} people</b> detected in the camera frame.<br>` +
+        `Only you must be visible during the exam.<br>` +
+        `Violation <b>${S.multipleFaceWarnings}/2</b> — a second violation will <b>auto-submit</b>.`
+      );
+    }
+    return;
+  }
+
+  // ── CASE 3: Single face — check orientation ──
+  S.noFaceCount       = 0;  // reset consecutive no-face
+  S.multipleFaceCount = 0;  // reset consecutive multi-face
+
+  let facingScreen = true;
+  const det = detections[0];
+
+  // Face-distance heuristic (user moved far back)
+  const box = det.detection ? det.detection.box : det.box;
+  const area = box.width * box.height;
+  if(S.lastFaceArea > 0) {
+    const ratio = area / S.lastFaceArea;
+    if(ratio < 0.3) {
+      S.proctoringLog.push({ time:now, event:'face_distance_drop', ratio:ratio.toFixed(2) });
+    }
+  }
+  S.lastFaceArea = area;
+
+  // Centering check (warn but don't submit)
+  const vid = document.getElementById('webcam-mini');
+  const vidW = vid ? (vid.videoWidth || 320) : 320;
+  const vidH = vid ? (vid.videoHeight || 240) : 240;
+  const cx = box.x + box.width/2;
+  const cy = box.y + box.height/2;
+  const notCentered = cx < vidW*0.1 || cx > vidW*0.9 || cy < vidH*0.05;
+  if(notCentered) {
+    S.proctoringLog.push({ time:now, event:'face_not_centered' });
+    updateProctorBox('⚠ Adjust position — face not centered', 'warn');
+    updateMiniStatus('⚠ Off-Center', 'warn');
+    return; // not a submit-worthy violation
+  }
+
+  // Head orientation (landmark-based yaw)
+  if(landmarksLoaded && det.landmarks) {
+    facingScreen = estimateHeadOrientation(det.landmarks);
+    if(!facingScreen) {
+      S.faceAwayCount++;
+      S.proctoringLog.push({ time:now, event:'face_turned_away', count:S.faceAwayCount });
+      updateProctorBox(`⚠ Look at screen (${S.faceAwayCount}/2 look-away events)`, 'warn');
+      updateMiniStatus('⚠ Look Away', 'warn');
+      flashViolation('warn');
+
+      if(S.faceAwayCount >= 2) {
+        S.faceAwayWarnings++;
+        if(S.faceAwayWarnings >= 2) {
+          finalSubmit(true, 'face_turned_away');
+          return;
+        }
+        S.faceAwayCount = 0;
+        triggerProcWarn(
+          `⚠ You have <b>looked away from the screen</b> repeatedly.<br>` +
+          `Violation <b>${S.faceAwayWarnings}/2</b>.<br>` +
+          `Keep your face visible and forward. A second occurrence will <b>auto-submit</b>.`
+        );
+      }
+      return;
+    }
+  }
+
+  // ── All clear ──
+  S.faceAwayCount = 0; // consecutive look-away reset on OK frame
+  S.proctoringLog.push({ time:now, event:'ok', faces:1, facing:facingScreen });
+  updateProctorBox('✅ Face visible — proctoring OK', 'ok');
+  updateMiniStatus('✅ OK', 'ok');
+}
+
+// ── Update the header proctor mini-status badge ──
+function updateMiniStatus(text, state) {
+  const el = document.getElementById('proctor-mini-status');
+  if(!el) return;
+  el.textContent = text;
+  el.className = state ? state : '';
+}
+
+function updateProctorBox(msg, state){
+  const el = document.getElementById('proctor-box');
+  if(el) {
+    el.textContent = '📷 ' + msg;
+    el.style.borderColor = state === 'ok' ? 'var(--ok)' : state === 'warn' ? 'var(--warn)' : state === 'err' ? 'var(--err)' : '';
+    el.style.color       = state === 'ok' ? 'var(--ok2)' : state === 'warn' ? 'var(--warn)' : state === 'err' ? 'var(--err)' : '';
+  }
+}
+
+function triggerProcWarn(msg){
+  if(S.submitted) return;
+  document.getElementById('procwarn-msg').innerHTML = msg;
+  openModal('modal-procwarn');
+  toast(msg.replace(/<[^>]*>/g,''), 'warn');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  onCameraStreamEnded() — NEW v2.2
+//  Triggered if camera is unplugged or forcibly disabled.
+//  Issues a warning; auto-submits after 1 retry failure.
+// ─────────────────────────────────────────────────────────────
+function onCameraStreamEnded() {
+  if(S.submitted) return;
+  S.cameraStreamLost++;
+  const now = new Date().toISOString();
+  S.proctoringLog.push({ time:now, event:'camera_stream_ended', attempt:S.cameraStreamLost });
+  updateMiniStatus('⛔ CAM LOST', 'err');
+  updateProctorBox('⛔ Camera stream lost!', 'err');
+
+  if(S.cameraStreamLost >= 2) {
+    finalSubmit(true, 'camera_disabled');
+    return;
+  }
+
+  triggerProcWarn(
+    `⛔ <b>Your camera has stopped.</b><br>` +
+    `Ensure your webcam is connected and not blocked.<br>` +
+    `If the camera does not recover, your exam will be <b>auto-submitted</b>.`
+  );
+
+  // Try to recover after 4 seconds
+  setTimeout(async () => {
+    if(S.submitted) return;
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:'user', width:{ ideal:640 } }
+      });
+      S.stream = newStream;
+      const mini = document.getElementById('webcam-mini');
+      if(mini) mini.srcObject = newStream;
+      newStream.getVideoTracks()[0].onended = onCameraStreamEnded;
+      S.proctoringLog.push({ time:new Date().toISOString(), event:'camera_recovered' });
+      updateMiniStatus('✅ OK', '');
+    } catch(e) {
+      // Recovery failed — auto-submit
+      finalSubmit(true, 'camera_disabled');
+    }
+  }, 4000);
+}
+
+// ══════════════════════════════════════
+//  TIMER
+// ══════════════════════════════════════
+function startTimer(){
+  S.timerH = setInterval(()=>{
+    S.timeLeft--;
+    const tb = document.getElementById('timer-box');
+    const m = Math.floor(S.timeLeft/60), s = S.timeLeft%60;
+    tb.textContent = pad(m)+':'+pad(s);
+    tb.className = 'timer' + (S.timeLeft<=60?' danger':S.timeLeft<=300?' warn':'');
+    if(S.timeLeft<=0){ clearInterval(S.timerH); finalSubmit(true,'timeout'); }
+  }, 1000);
+}
+
+// ══════════════════════════════════════
+//  TAB WATCHER
+// ══════════════════════════════════════
+function startTabWatch(){
+  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('blur', onBlur);
+}
+function onVis(){ if(document.hidden && !S.submitted) triggerWarn(); }
+function onBlur(){ if(!S.submitted) triggerWarn(); }
+function triggerWarn(){
+  if(S.submitted) return;
+  S.warnings++;
+  document.getElementById('warn-label').textContent = `⚠ ${S.warnings}/2`;
+  if(S.warnings >= 2){ closeModal('modal-tabwarn'); finalSubmit(true,'tab_switch'); return; }
+  document.getElementById('tabwarn-msg').innerHTML =
+    `You left the exam. Warning <b>${S.warnings} of 2</b>. One more violation auto-submits.`;
+  openModal('modal-tabwarn');
+}
+
+// ══════════════════════════════════════
+//  SNAPSHOTS
+// ══════════════════════════════════════
+function startSnaps(){ takeSnap(); S.snapH = setInterval(takeSnap, 30000); }
+function takeSnap(){
+  const vid = document.getElementById('webcam-preview') || document.getElementById('webcam-mini');
+  if(!vid || !vid.srcObject) return;
+  const c = document.createElement('canvas'); c.width=200; c.height=150;
+  c.getContext('2d').drawImage(vid,0,0,200,150);
+  const url = c.toDataURL('image/jpeg',0.6);
+  S.snapshots.push({time:new Date().toISOString(), img:url});
+  const strip = document.getElementById('snap-strip');
+  const cnt = document.getElementById('snap-count');
+  if(strip){
+    const img = document.createElement('img'); img.src = url;
+    strip.appendChild(img);
+    if(strip.children.length > 5) strip.removeChild(strip.firstChild);
+  }
+  if(cnt) cnt.textContent = `${S.snapshots.length} snapshot(s) captured`;
+}
+
+// ══════════════════════════════════════
+//  RENDER QUESTION
+// ══════════════════════════════════════
+function renderQ(idx){
+  S.current = idx;
+  const e = S.questions[idx];
+  const q = e.q;
+  const keys = ['A','B','C','D'];
+  const total = S.questions.length;
+
+  let optsHtml = e.optOrder.map((origIdx, pos) => {
+    const sel = e.userAnswer === pos;
+    return `<div class="opt${sel?' selected':''}" onclick="selOpt(${idx},${pos})">
+      <input type="radio" name="opt" ${sel?'checked':''}>
+      <span class="opt-key">${keys[pos]}</span>
+      <span>${q.opts[origIdx]}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('q-card').innerHTML = `
+    <div class="qmeta">
+      <span class="qnum">Question ${idx+1} of ${total}</span>
+      <span class="qmod">${q.module}</span>
+    </div>
+    <div class="qtext">${q.text}</div>
+    <div class="opts">${optsHtml}</div>
+    <div class="qnav">
+      <button class="bsm b-outline" onclick="navQ(-1)" ${idx===0?'disabled':''}>← Previous</button>
+      <div class="nav-mid">
+        <button class="bsm b-flag" onclick="flagQ(${idx})">${e.flagged?'🚩 Flagged':'🏳 Flag'}</button>
+        <button class="bsm b-submit" onclick="openModal('modal-submit')">Submit Exam</button>
+      </div>
+      <button class="bsm b-outline" onclick="navQ(1)" ${idx===total-1?'disabled':''}>Next →</button>
+    </div>`;
+
+  updatePalette();
+  updateProgress();
+}
+function selOpt(qi, pos){ S.questions[qi].userAnswer = pos; renderQ(qi); }
+function navQ(d){ const n=S.current+d; if(n>=0&&n<S.questions.length) renderQ(n); }
+function flagQ(i){ S.questions[i].flagged=!S.questions[i].flagged; renderQ(i); }
+
+// ══════════════════════════════════════
+//  PALETTE
+// ══════════════════════════════════════
+function buildPalette(){
+  document.getElementById('q-palette').innerHTML = S.questions.map((_,i)=>
+    `<button class="qbtn" id="pb-${i}" onclick="renderQ(${i})">${i+1}</button>`
+  ).join('');
+}
+function updatePalette(){
+  S.questions.forEach((e,i)=>{
+    const b = document.getElementById('pb-'+i);
+    if(!b) return;
+    b.className = 'qbtn' + (i===S.current?' current':e.userAnswer>=0?' answered':e.flagged?' flagged':'');
+  });
+}
+function updateProgress(){
+  const ans = S.questions.filter(e=>e.userAnswer>=0).length;
+  const flg = S.questions.filter(e=>e.flagged).length;
+  const tot = S.questions.length;
+  document.getElementById('progress-box').innerHTML =
+    `✅ Answered: <b>${ans}</b>/${tot}<br>🚩 Flagged: <b>${flg}</b><br>⬜ Remaining: <b>${tot-ans}</b>`;
+}
+
+// ══════════════════════════════════════
+//  SUBMIT
+// ══════════════════════════════════════
+function finalSubmit(auto=false, reason='manual'){
+  if(S.submitted) return;
+  S.submitted = true;
+  clearInterval(S.timerH);
+  clearInterval(S.snapH);
+  clearInterval(S.faceH);
+  if(cameraDetectionHandle){ clearInterval(cameraDetectionHandle); cameraDetectionHandle=null; }
+  document.removeEventListener('visibilitychange', onVis);
+  window.removeEventListener('blur', onBlur);
+  if(S.stream) S.stream.getTracks().forEach(t=>t.stop());
+  closeModal('modal-submit'); closeModal('modal-tabwarn'); closeModal('modal-procwarn');
+  showResults(auto, reason);
+}
+
+// ══════════════════════════════════════
+//  RESULTS + BACKEND SAVE
+//  NOTE: Answer key is NOT shown to student.
+//  Full detail is stored in Excel on backend.
+// ══════════════════════════════════════
+async function showResults(auto, reason='manual'){
+  show('screen-result');
+  const elapsed = Math.round((Date.now()-S.startTime)/1000);
+  const mm=Math.floor(elapsed/60), ss=elapsed%60;
+  let correct=0,wrong=0;
+  S.questions.forEach(e=>{
+    if(e.userAnswer<0) return;
+    if(e.optOrder[e.userAnswer]===e.q.correct) correct++;
+    else wrong++;
+  });
+  const skipped = S.questions.length - correct - wrong;
+  const score = correct*2, maxScore = S.questions.length*2;
+  const pct = Math.round((score/maxScore)*100);
+  const pass = pct>=40;
+  const keys=['A','B','C','D'];
+
+  // Build full answer detail (sent to backend ONLY — never shown in UI)
+  const answers = S.questions.map(e=>{
+    const isCorrect = e.userAnswer>=0 && e.optOrder[e.userAnswer]===e.q.correct;
+    const corrIdx   = e.optOrder.indexOf(e.q.correct);
+    return {
+      module: e.q.module,
+      question: e.q.text,
+      yourAnswer: e.userAnswer>=0 ? keys[e.userAnswer]+'. '+e.q.opts[e.optOrder[e.userAnswer]] : 'Skipped',
+      correctAnswer: keys[corrIdx]+'. '+e.q.opts[e.q.correct],
+      status: isCorrect?'Correct':e.userAnswer<0?'Skipped':'Wrong',
+      explanation: e.q.explanation,
+    };
+  });
+
+  // ── Compact result card (no answer key) ──
+  const autoReason = {
+    'timeout': 'Timer expired',
+    'tab_switch': 'Tab switch limit exceeded',
+    'multiple_faces': 'Multiple people detected in webcam',
+    'face_turned_away': 'Face turned away repeatedly',
+    'camera_disabled': 'Camera stream was lost or disabled',
+    'manual': 'Submitted by student',
+  }[reason] || reason;
+
+  document.getElementById('result-card').innerHTML = `
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:12px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:1px">
+      ${auto ? '⏱ AUTO-SUBMITTED — '+autoReason : '✓ Submitted by student'}
+    </div>
+    <h2 style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:20px">Examination Result</h2>
+    <div class="score-ring ${pass?'pass':'fail'}">
+      <span class="score-pct">${pct}%</span>
+      <span class="score-label">${pass?'PASS':'FAIL'}</span>
+    </div>
+    <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:2px">${S.name}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:2px;font-family:'IBM Plex Mono',monospace">${S.usn}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:4px;font-family:'IBM Plex Mono',monospace">${S.email}</div>
+    <div class="rstats">
+      <div class="rstat ok"><div class="val">${correct}</div><div class="lbl">CORRECT</div></div>
+      <div class="rstat err"><div class="val">${wrong}</div><div class="lbl">WRONG</div></div>
+      <div class="rstat"><div class="val">${skipped}</div><div class="lbl">SKIPPED</div></div>
+    </div>
+    <div class="result-info-row">
+      <div class="row"><span class="key">SCORE</span><span class="val">${score} / ${maxScore}</span></div>
+      <div class="row"><span class="key">PERCENTAGE</span><span class="val">${pct}%</span></div>
+      <div class="row"><span class="key">RESULT</span><span class="val" style="color:${pass?'var(--ok)':'var(--err)'}">${pass?'✅ PASS':'❌ FAIL'}</span></div>
+      <div class="row"><span class="key">TIME TAKEN</span><span class="val">${pad(mm)}:${pad(ss)}</span></div>
+      <div class="row"><span class="key">TAB WARNINGS</span><span class="val">${S.warnings} / 2</span></div>
+      <div class="row"><span class="key">SUBMITTED AT</span><span class="val">${new Date().toLocaleString()}</span></div>
+    </div>
+    <div id="drive-status-area"></div>
+    <div class="darea">
+      <button style="background:var(--accent);color:#fff" onclick="window.print()">🖨 Print Report</button>
+    </div>
+    <p style="font-size:11px;color:var(--ink3);margin-top:20px;line-height:1.6">
+      Your detailed answer key and module-wise breakdown are saved securely in the administrator's Google Drive report. Contact your instructor for detailed feedback.
+    </p>`;
+
+  // ── Send to backend → Google Drive ──
+  // Mark attempt in localStorage immediately (before network call)
+  try { localStorage.setItem('attempted_' + S.usn, '1'); } catch(e) {}
+  openModal('modal-saving');
+  const payload = {
+    name: S.name, usn: S.usn, email: S.email,
+    score, maxScore, percentage: pct, passed: pass,
+    correct, wrong, skipped,
+    timeTaken: `${pad(mm)}:${pad(ss)}`,
+    warnings: S.warnings,
+    autoSubmit: auto,
+    autoReason: autoReason,
+    cameraUsed: !!S.stream,
+    submittedAt: new Date().toISOString(),
+    proctoringLog: S.proctoringLog,
+    snapshotCount: S.snapshots.length,
+    faceAwayCount: S.faceAwayWarnings,         // total look-away warnings issued
+    noFaceCount: S.noFaceWarnings,             // total no-face warnings issued
+    multipleFaceWarnings: S.multipleFaceWarnings,
+    cameraStreamLost: S.cameraStreamLost,
+    answers, // full answer key — stored in Excel, NOT shown in UI
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api/submit`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    closeModal('modal-saving');
+    const area = document.getElementById('drive-status-area');
+    if(res.status === 409 || (data && !data.ok && data.error === 'Already submitted')){
+      area.innerHTML = `<div class="drive-status drive-err">⚠ This exam was already submitted. Your previous submission is on record.</div>`;
+    } else if(data.ok && data.driveSaved){
+      area.innerHTML = `<div class="drive-status drive-ok">
+        ✅ Result saved to Google Drive.
+        ${data.driveLink?`<br><a href="${data.driveLink}" target="_blank" style="color:var(--ok2);font-weight:700">Open in Drive →</a>`:''}
+      </div>`;
+    } else if(data.ok){
+      area.innerHTML = `<div class="drive-status drive-info">💾 Saved on server. ${data.message||''}</div>`;
+    } else {
+      area.innerHTML = `<div class="drive-status drive-err">⚠ Server error: ${data.error}</div>`;
+    }
+  } catch(e){
+    closeModal('modal-saving');
+    document.getElementById('drive-status-area').innerHTML =
+      `<div class="drive-status drive-err">⚠ Could not reach server. Start backend with: <code>node server.js</code></div>`;
+  }
+}
+
+// ══════════════════════════════════════
+//  CRYPTO-GRADE SHUFFLE (Fisher-Yates + crypto random)
+// ══════════════════════════════════════
+function cryptoShuffle(arr){
+  for(let i = arr.length-1; i > 0; i--){
+    let j;
+    if(typeof crypto !== 'undefined' && crypto.getRandomValues){
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      j = buf[0] % (i+1);
+    } else {
+      j = Math.floor(Math.random()*(i+1));
+    }
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+  return arr;
+}
+
+// ══════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function openModal(id){document.getElementById(id).classList.add('show');}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function pad(n){return n<10?'0'+n:''+n;}
+function toast(msg, type='err'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className = 'toast show' + (type==='warn'?' warn-toast':'');
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+</script>
+</body>
+</html>
