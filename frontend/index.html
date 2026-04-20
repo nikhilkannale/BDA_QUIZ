@@ -524,11 +524,13 @@ body::before{
     <h2>📋 Examination Instructions</h2>
     <p class="sub">Read carefully before proceeding. All violations are logged and affect your proctoring report.</p>
     <ul class="ilist">
-      <li><span class="ic">⏱</span><div><strong>Duration:</strong> 75 minutes for 25 questions. Timer starts on "Begin Test".</div></li>
-      <li><span class="ic">📝</span><div><strong>Questions:</strong> 25 MCQs from 5 BDA modules. Order randomized per session.</div></li>
+      <li><span class="ic">⏱</span><div><strong>Duration:</strong> 90 minutes for 50 questions. Timer starts on "Begin Test".</div></li>
+      <li><span class="ic">📝</span><div><strong>Questions:</strong> 50 MCQs from 5 BDA modules. Order randomized per session.</div></li>
       <li><span class="ic">🔄</span><div><strong>Navigation:</strong> Move freely, flag questions for review. Unanswered = 0 marks.</div></li>
       <li><span class="ic">✅</span><div><strong>Marking:</strong> <b>+2</b> correct, <b>0</b> wrong/unanswered — no negative marking.</div></li>
       <li><span class="ic">🚫</span><div><strong>Tab switching</strong> is monitored. 2 violations → auto-submission.</div></li>
+      <li><span class="ic">🖥</span><div><strong>Fullscreen required:</strong> The exam runs in fullscreen. Exiting fullscreen counts as a violation (2 exits = auto-submit).</div></li>
+      <li><span class="ic">📸</span><div><strong>Screen activity:</strong> Window focus loss, rapid app-switching, and suspicious activity are detected and logged. 2 violations → auto-submit.</div></li>
       <li><span class="ic">📋</span><div><strong>Copy/paste &amp; right-click</strong> are disabled during the exam.</div></li>
       <li><span class="ic">📷</span><div><strong>Webcam:</strong> Active throughout. Snapshots every 30s. Proctoring rules below apply.</div></li>
       <li><span class="ic">💾</span><div><strong>Results</strong> are saved as Excel to Google Drive. Only a summary is shown to you after submission.</div></li>
@@ -543,7 +545,7 @@ body::before{
         • Camera must remain active; disabling it mid-exam is flagged in your report.
       </div>
     </div>
-    <div class="note note-warn">⚠️ Switching tabs/windows triggers a warning. <b>After 2 warnings your exam is auto-submitted.</b></div>
+    <div class="note note-warn">⚠️ Switching tabs, exiting fullscreen, or leaving the exam window triggers a warning. <b>After 2 warnings your exam is auto-submitted. Do not take screenshots or switch apps.</b></div>
     <div class="center">
       <button class="btn-proceed" onclick="goCameraCheck()">Proceed to Camera Check →</button>
     </div>
@@ -609,7 +611,7 @@ body::before{
     <div style="display:flex;align-items:center;gap:10px">
       <span id="proctor-mini-status">✅ OK</span>
       <span class="warn-badge" id="warn-label">⚠ 0/2</span>
-      <div class="timer" id="timer-box">75:00</div>
+      <div class="timer" id="timer-box">90:00</div>
     </div>
   </div>
   <div class="qbody">
@@ -680,6 +682,23 @@ body::before{
   </div>
 </div>
 
+<!-- ══ ANTI-CHEAT: Fullscreen / Suspicious Activity Warning ══ -->
+<div class="overlay" id="modal-fswarn">
+  <div class="modal">
+    <h3 style="color:var(--err)">🚨 Suspicious Activity Detected!</h3>
+    <p id="fswarn-msg">You exited fullscreen or left the exam window. Warning <b>1 of 2</b>. A second violation will <b>auto-submit</b> your exam.</p>
+    <div class="mbts">
+      <button class="mconfirm" onclick="dismissFsWarn()">Return to Exam</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ANTI-CHEAT: Red flash overlay (shows on every violation) ══ -->
+<div id="ac-flash" style="
+  position:fixed;inset:0;z-index:9000;pointer-events:none;
+  background:rgba(201,42,42,0);transition:background .15s;
+"></div>
+
 <script>
 // ══════════════════════════════════════
 //  CONFIG
@@ -687,109 +706,218 @@ body::before{
 const API_BASE = 'http://localhost:3000'; // Change to your deployed server URL
 
 // ══════════════════════════════════════
-//  QUESTION BANK  (25 Qs, 5 modules × 5)
+//  QUESTION BANK  (50 Qs — 5 modules)
 // ══════════════════════════════════════
 const QUESTION_BANK = [
-  {id:1,module:"Big Data Fundamentals",
-    text:"An e-commerce company stores 500 TB of clickstream data with 200+ attributes per event. Traditional RDBMS fail mainly because:",
-    opts:["A. SQL syntax is incompatible","B. Vertical scaling hits hardware limits and schema rigidity prevents unstructured ingestion","C. RDBMS cannot run on Linux","D. Column-level encryption is unavailable"],
-    correct:1,explanation:"Big Data's Volume+Variety overwhelms RDBMS vertical-scaling ceilings and strict schemas."},
-  {id:2,module:"Big Data Fundamentals",
-    text:"Which V of Big Data specifically refers to the degree of trust you can assign to each data point in a healthcare dataset with missing and conflicting records?",
-    opts:["A. Velocity","B. Volume","C. Veracity","D. Variability"],
-    correct:2,explanation:"Veracity describes data quality, accuracy, and trustworthiness."},
-  {id:3,module:"Big Data Fundamentals",
-    text:"Lambda Architecture separates processing into batch and speed layers primarily to:",
-    opts:["A. Reduce hardware costs","B. Achieve both low-latency real-time views and accurate historical views simultaneously","C. Eliminate the need for a serving layer","D. Store data only in HDFS"],
-    correct:1,explanation:"Lambda's dual-layer design balances latency (speed) vs accuracy (batch)."},
-  {id:4,module:"Big Data Fundamentals",
-    text:"A social media platform sees spikes of 10 M posts/sec during live events. Which Big Data characteristic is primarily challenged?",
-    opts:["A. Volume","B. Variety","C. Velocity","D. Value"],
-    correct:2,explanation:"Velocity concerns the speed at which data arrives and must be processed."},
-  {id:5,module:"Big Data Fundamentals",
-    text:"Kappa Architecture improves upon Lambda by:",
-    opts:["A. Removing the speed layer","B. Removing the batch layer and reprocessing all data through a single streaming pipeline","C. Adding a governance layer","D. Using only SQL databases"],
-    correct:1,explanation:"Kappa uses a single streaming engine for both real-time and reprocessing, simplifying Lambda."},
-  {id:6,module:"Hadoop & HDFS",
-    text:"HDFS stores file blocks across DataNodes with a default replication factor of 3. If one DataNode crashes, the NameNode triggers:",
-    opts:["A. Immediate cluster shutdown","B. Under-replication detection and schedules re-replication on healthy nodes","C. Read-only mode for all files","D. Secondary NameNode promotion"],
-    correct:1,explanation:"NameNode detects under-replication via heartbeat loss and re-replicates to restore factor=3."},
-  {id:7,module:"Hadoop & HDFS",
-    text:"The HDFS NameNode is a Single Point of Failure. Hadoop 2.x addresses this through:",
-    opts:["A. RAID on the NameNode disk","B. Automatic NameNode sharding","C. Active-Standby NameNode with Zookeeper-based failover and a shared edit log","D. Dual DataNode architecture"],
-    correct:2,explanation:"Hadoop HA uses Zookeeper for automatic failover between active and standby NameNodes."},
-  {id:8,module:"Hadoop & HDFS",
-    text:"A 5 GB file is stored in HDFS with a block size of 128 MB. Approximately how many blocks are created (ignoring metadata)?",
-    opts:["A. 5","B. 20","C. 40","D. 80"],
-    correct:2,explanation:"5120 MB ÷ 128 MB ≈ 40 blocks."},
-  {id:9,module:"Hadoop & HDFS",
-    text:"YARN's ResourceManager and NodeManager relationship is best described as:",
-    opts:["A. RM stores data; NM computes","B. RM manages cluster resources globally; NM manages per-node container lifecycle","C. NM replaces the NameNode in Hadoop 3","D. RM handles HDFS replication"],
-    correct:1,explanation:"YARN separates resource management (RM) from per-node execution management (NM)."},
-  {id:10,module:"Hadoop & HDFS",
-    text:"An analyst notices that a MapReduce job reads data from HDFS at half the expected throughput. The MOST likely cause is:",
-    opts:["A. Too many reducers","B. Data skew causing mapper imbalance and rack-locality miss due to DataNode failures","C. Incorrect input format class","D. Python used instead of Java"],
-    correct:1,explanation:"Rack-locality misses force cross-rack network transfers, and mapper skew causes idle slots."},
-  {id:11,module:"MapReduce",
-    text:"In MapReduce, the Combiner is best described as:",
-    opts:["A. A reducer that runs on the master node","B. A local aggregation step on the mapper side to reduce shuffle data volume","C. A secondary sort mechanism","D. An HDFS write accelerator"],
-    correct:1,explanation:"Combiners mini-reduce mapper output locally, shrinking data transferred during shuffle."},
-  {id:12,module:"MapReduce",
-    text:"The shuffle and sort phase in MapReduce is responsible for:",
-    opts:["A. Writing final output to HDFS","B. Partitioning, sorting by key, and transferring mapper outputs to the correct reducers","C. Splitting input files into splits","D. Spawning the ApplicationMaster"],
-    correct:1,explanation:"Shuffle groups all values for each key and transfers them to the assigned reducer."},
-  {id:13,module:"MapReduce",
-    text:"A MapReduce word-count job on 10 GB of text produces 200 MB of intermediate data. A Combiner is added. The MOST direct benefit is:",
-    opts:["A. Fewer map tasks required","B. Significantly reduced network I/O during shuffle phase","C. Smaller HDFS block size","D. Increased reducer parallelism"],
-    correct:1,explanation:"Combiners reduce intermediate data size before shuffle, lowering network I/O."},
-  {id:14,module:"MapReduce",
-    text:"Secondary sort in MapReduce is used to:",
-    opts:["A. Sort final HDFS output","B. Control the order in which values arrive at the reducer for a given key using a composite key","C. Add a second pass of mapping","D. Compress reducer output"],
-    correct:1,explanation:"Secondary sort constructs composite keys to order values within a reducer key group."},
-  {id:15,module:"MapReduce",
-    text:"A MapReduce job's reduce phase is extremely slow while mapper utilisation is 100%. The BEST optimization is:",
-    opts:["A. Reduce the block size","B. Investigate key skew and use a custom partitioner or salting to distribute load evenly","C. Add more NameNodes","D. Use smaller input splits"],
-    correct:1,explanation:"Data skew sends too many values to one reducer; salting/custom partitioners balance load."},
-  {id:16,module:"NoSQL Databases",
-    text:"According to CAP theorem, in the presence of a network partition, a distributed database must choose between:",
-    opts:["A. Consistency and Durability","B. Availability and Partition Tolerance","C. Consistency and Availability","D. Latency and Throughput"],
-    correct:2,explanation:"CAP: during a partition, you can guarantee C (consistent reads) OR A (always respond), not both."},
-  {id:17,module:"NoSQL Databases",
-    text:"HBase uses Log-Structured Merge Trees (LSM-Trees). The compaction process is necessary to:",
-    opts:["A. Increase replication factor","B. Merge accumulated HFiles, reclaim space from deleted/updated rows, and improve read performance","C. Sync data to HDFS NameNode","D. Convert column families to row keys"],
-    correct:1,explanation:"HBase compaction merges SSTables (HFiles) to reduce read amplification and reclaim space."},
-  {id:18,module:"NoSQL Databases",
-    text:"Cassandra's consistency level QUORUM in a cluster with replication factor RF=5 requires acknowledgement from:",
-    opts:["A. 1 node","B. 2 nodes","C. 3 nodes","D. 5 nodes"],
-    correct:2,explanation:"QUORUM = floor(RF/2)+1 = floor(5/2)+1 = 3 nodes must respond."},
-  {id:19,module:"NoSQL Databases",
-    text:"MongoDB's aggregation pipeline stage $lookup is equivalent to which SQL operation?",
-    opts:["A. GROUP BY","B. LEFT OUTER JOIN","C. UNION ALL","D. HAVING"],
-    correct:1,explanation:"$lookup performs a left outer join between two collections."},
-  {id:20,module:"NoSQL Databases",
-    text:"A sensor network writes 50,000 rows/sec with time-series keys like sensor_id+timestamp. The MOST appropriate NoSQL model is:",
-    opts:["A. Document store (MongoDB)","B. Graph database (Neo4j)","C. Wide-column store (Cassandra) with composite partition key","D. Key-value cache (Redis) as primary store"],
-    correct:2,explanation:"Cassandra's wide-column model with composite keys handles high-velocity time-series writes optimally."},
-  {id:21,module:"Spark & Advanced Analytics",
-    text:"Spark's RDD lineage (DAG) is used to:",
-    opts:["A. Schedule YARN containers","B. Rebuild lost partitions by recomputing from the original source without HDFS re-read","C. Serialize Java objects for shuffle","D. Manage Spark SQL metadata"],
-    correct:1,explanation:"RDD lineage tracks transformations; lost partitions are recomputed along the DAG—no checkpointing needed."},
-  {id:22,module:"Spark & Advanced Analytics",
-    text:"Which Spark transformation is WIDE (requires shuffle)?",
-    opts:["A. map()","B. filter()","C. flatMap()","D. groupByKey()"],
-    correct:3,explanation:"groupByKey is a wide transformation; all others listed are narrow (no shuffle required)."},
-  {id:23,module:"Spark & Advanced Analytics",
-    text:"In Spark Structured Streaming, the 'watermark' concept is used to:",
-    opts:["A. Control executor memory allocation","B. Handle late-arriving data by defining how late an event can be before it's dropped from aggregations","C. Set the streaming batch interval","D. Authenticate Kafka brokers"],
-    correct:1,explanation:"Watermarks define a late-data threshold; events beyond it are discarded to bound state size."},
-  {id:24,module:"Spark & Advanced Analytics",
-    text:"MLlib's ALS (Alternating Least Squares) algorithm is primarily used for:",
-    opts:["A. Text classification","B. Time-series forecasting","C. Collaborative filtering / recommendation systems","D. Graph shortest path computation"],
-    correct:2,explanation:"ALS factorises user-item matrices for collaborative filtering—classic recommender systems."},
-  {id:25,module:"Spark & Advanced Analytics",
-    text:"A Spark job runs slower than expected. The Spark UI shows one task taking 10x longer than others in the same stage. This is MOST likely caused by:",
-    opts:["A. Insufficient driver memory","B. Data skew causing one partition to hold disproportionately large data","C. Wrong Spark version","D. Too many executors"],
-    correct:1,explanation:"Partition skew causes a single task to process far more records, becoming a straggler."},
+  // ── MODULE 1: Big Data Fundamentals & Hadoop (Q1–Q15) ──
+  {id:1,module:"Module 1",
+    text:"What are the main components of Hadoop?",
+    opts:["A. MapReduce","B. HDFS","C. YARN","D. All of the above"],
+    correct:3,explanation:"Hadoop's core components are HDFS (storage), MapReduce (processing), and YARN (resource management)."},
+  {id:2,module:"Module 1",
+    text:"Big data analytics works on unstructured data, where no specific pattern of the data is defined.",
+    opts:["A. True","B. False","C. Can't Say","D. None of the above"],
+    correct:0,explanation:"Big data analytics is designed specifically to handle unstructured and semi-structured data with no fixed schema."},
+  {id:3,module:"Module 1",
+    text:"Identify the incorrect Big Data technology.",
+    opts:["A. Apache PyTorch","B. Apache Kafka","C. Apache Hadoop","D. Apache Spark"],
+    correct:0,explanation:"PyTorch is a deep learning framework, not a Big Data technology. Kafka, Hadoop, and Spark are all recognised Big Data tools."},
+  {id:4,module:"Module 1",
+    text:"Big data analysis does the following EXCEPT:",
+    opts:["A. Spreads data","B. Analyses data","C. Organizes data","D. Collects data"],
+    correct:0,explanation:"Big data analysis collects, organises, and analyses data. Spreading data is not a recognised function of big data analysis."},
+  {id:5,module:"Module 1",
+    text:"What is NOT a characteristic of Big Data?",
+    opts:["A. Volume","B. Variety","C. Vision","D. Velocity"],
+    correct:2,explanation:"The Vs of Big Data are Volume, Variety, Velocity, Veracity, and Value. Vision is not one of them."},
+  {id:6,module:"Module 1",
+    text:"Which of the following scenario failure makes HDFS unavailable?",
+    opts:["A. Task Tracker failure","B. Job Tracker failure","C. NameNode failure","D. DataNode failure"],
+    correct:2,explanation:"The NameNode is the single point of failure in HDFS; its failure makes the entire file system unavailable. DataNode failures only affect specific blocks."},
+  {id:7,module:"Module 1",
+    text:"Which phase of the data analytics lifecycle usually takes the longest time?",
+    opts:["A. Phase 2: Data Preparation","B. Phase 3: Model Planning","C. Phase 4: Model Building","D. Phase 5: Communicate Results"],
+    correct:0,explanation:"Data Preparation (cleaning, transformation, feature engineering) consistently takes 60–80% of total project time in real-world analytics projects."},
+  {id:8,module:"Module 1",
+    text:"The data analytics project life cycle stages in correct sequence are:",
+    opts:["A. Identifying problem → Designing requirements → Pre-processing data → Performing analytics → Visualizing data","B. Identifying problem → Designing requirements → Performing analytics → Pre-processing data → Visualizing data","C. Identifying problem → Performing analytics → Designing requirements → Pre-processing data → Visualizing data","D. Identifying problem → Visualizing data → Designing requirements → Pre-processing data → Performing analytics"],
+    correct:0,explanation:"The correct lifecycle sequence is: identify problem → design requirements → pre-process data → perform analytics → visualize/communicate results."},
+  {id:9,module:"Module 1",
+    text:"Which application of social network data analysis is used by a customer retention manager?",
+    opts:["A. Business intelligence","B. Marketing","C. Product design and development","D. Insurance fraud"],
+    correct:1,explanation:"Customer retention managers use social network analysis for targeted marketing campaigns to identify at-risk customers and retain them."},
+  {id:10,module:"Module 1",
+    text:"Identify the technologies that enable fraud identification and the predictive modeling process.",
+    opts:["A. Text mining","B. Social media data analysis","C. Regression analysis","D. All of the above"],
+    correct:3,explanation:"Fraud detection employs text mining, social media analysis, and regression/predictive modelling together as complementary techniques."},
+  {id:11,module:"Module 1",
+    text:"Who among the following would be able to deal with the growing number of data sources efficiently?",
+    opts:["A. Business developer","B. Data scientist","C. Sales executive","D. Web designer"],
+    correct:1,explanation:"Data scientists have the technical skills (statistics, programming, domain knowledge) to handle diverse and growing data sources efficiently."},
+  {id:12,module:"Module 1",
+    text:"Hadoop is a framework that works with a variety of related tools. Common cohorts include:",
+    opts:["A. MapReduce, Hive and HBase","B. MapReduce, MySQL and Google Apps","C. MapReduce, Hummer and Iguana","D. MapReduce, Heron and Trumpet"],
+    correct:0,explanation:"The standard Hadoop ecosystem includes MapReduce (processing), Hive (SQL querying), and HBase (NoSQL storage on HDFS)."},
+  {id:13,module:"Module 1",
+    text:"Which of the following are Benefits of Big Data Processing?",
+    opts:["A. Cost Reduction","B. Time Reduction","C. Smarter Business Decisions","D. All of the above"],
+    correct:3,explanation:"Big Data processing delivers cost reduction (commodity hardware), time reduction (parallel processing), and smarter decisions (data-driven insights)."},
+  {id:14,module:"Module 1",
+    text:"According to analysts, for what can traditional IT systems provide a foundation when integrated with Big Data technologies like Hadoop?",
+    opts:["A. Big data management and data mining","B. Data warehousing and business intelligence","C. Management of Hadoop clusters","D. Collecting and storing unstructured data"],
+    correct:1,explanation:"Traditional IT systems (RDBMS, data warehouses) provide a proven foundation for BI and structured analytics when integrated with Hadoop's big data capabilities."},
+  {id:15,module:"Module 1",
+    text:"Which of the following is a disadvantage of relational databases?",
+    opts:["A. Concurrency","B. Impedance mismatch","C. ACID transactions","D. Normalization"],
+    correct:1,explanation:"Impedance mismatch (the structural difference between relational tables and object-oriented code) is a key limitation of RDBMS; the others are generally advantages."},
+
+  // ── MODULE 2: MapReduce & YARN (Q16–Q25) ──
+  {id:16,module:"Module 2",
+    text:"Identify among the options which is a general-purpose computing model and runtime system for Distributed Data Analytics.",
+    opts:["A. HDFS","B. MapReduce","C. Oozie","D. All of the above"],
+    correct:1,explanation:"MapReduce is the general-purpose distributed computing model; HDFS is storage and Oozie is a workflow scheduler."},
+  {id:17,module:"Module 2",
+    text:"Pig is a Hadoop-based open-source platform for analysing large-scale datasets via its own SQL-like language ________.",
+    opts:["A. Pig Latin","B. Pig German","C. Pig Roman","D. Pig Italian"],
+    correct:0,explanation:"Apache Pig uses Pig Latin as its high-level data flow scripting language that compiles down to MapReduce jobs."},
+  {id:18,module:"Module 2",
+    text:"The key aspect of the MapReduce algorithm is that if every Map and Reduce is independent of all other ongoing Maps and Reduces, the operation will run in ______ keys and lists of data.",
+    opts:["A. Series on same","B. Series on different","C. Parallel on different","D. Parallel on same"],
+    correct:2,explanation:"MapReduce achieves parallelism by running independent Map and Reduce tasks concurrently on different keys and data partitions."},
+  {id:19,module:"Module 2",
+    text:"In Hadoop MapReduce, _____ is a Java class that comes with several methods to retrieve key and values by iterating them among the data splits.",
+    opts:["A. Mapper","B. Record Reader","C. Reporter","D. Record Collector"],
+    correct:1,explanation:"RecordReader reads data from an InputSplit and converts it into key-value pairs that the Mapper processes."},
+  {id:20,module:"Module 2",
+    text:"Hadoop MapReduce is a popular _____ for easily written applications that process vast amounts of data in parallel on large clusters.",
+    opts:["A. Spring framework","B. Java framework","C. Django framework","D. Web framework"],
+    correct:1,explanation:"Hadoop MapReduce is a Java-based framework that simplifies writing distributed data processing applications."},
+  {id:21,module:"Module 2",
+    text:"Which is NOT a way to link R and Hadoop?",
+    opts:["A. RHIPE","B. RHadoop","C. Hadoop Streaming","D. RHDFS"],
+    correct:3,explanation:"RHIPE, RHadoop, and Hadoop Streaming are valid R-Hadoop integration methods. RHDFS is a package within RHadoop, not a separate linking method."},
+  {id:22,module:"Module 2",
+    text:"The RHIPE package uses the ________ technique to perform data analytics over Big Data.",
+    opts:["A. Divide and recombine","B. Divide and conquer","C. Integrate and recombine","D. None of the above"],
+    correct:0,explanation:"RHIPE (R and Hadoop Integrated Programming Environment) uses the Divide and Recombine (D&R) statistical strategy for large dataset analysis."},
+  {id:23,module:"Module 2",
+    text:"_________ is a command-line tool that can import individual tables or specific database files directly into a distributed file system or data warehouse.",
+    opts:["A. Sqoop","B. Zookeeper","C. Pig","D. HBase"],
+    correct:0,explanation:"Apache Sqoop is designed specifically to transfer bulk data between RDBMS and HDFS/Hive/HBase."},
+  {id:24,module:"Module 2",
+    text:"__________ can best be described as a programming model used to develop Hadoop-based applications that can process massive amounts of data.",
+    opts:["A. MapReduce","B. Mahout","C. Oozie","D. All of the mentioned"],
+    correct:0,explanation:"MapReduce is the fundamental programming model for distributed data processing in Hadoop; Mahout is ML, Oozie is workflow scheduling."},
+  {id:25,module:"Module 2",
+    text:"A ________ node acts as the Slave and is responsible for executing a Task assigned to it by the JobTracker.",
+    opts:["A. MapReduce","B. Mapper","C. TaskTracker","D. JobTracker"],
+    correct:2,explanation:"TaskTracker runs on slave nodes and executes map/reduce tasks assigned by the JobTracker, reporting progress back."},
+  {id:26,module:"Module 2",
+    text:"The number of maps is usually driven by the total size of ____________.",
+    opts:["A. Inputs","B. Outputs","C. Tasks","D. None of the mentioned"],
+    correct:0,explanation:"The number of map tasks equals the number of InputSplits, which is determined by the total input data size divided by the configured split size."},
+  {id:27,module:"Module 2",
+    text:"_________ function is responsible for consolidating the results produced by each of the Map() functions/tasks.",
+    opts:["A. Reduce","B. Map","C. Reducer","D. All of the mentioned"],
+    correct:0,explanation:"The Reduce function aggregates and consolidates all intermediate key-value pairs produced by Map tasks to generate the final output."},
+
+  // ── MODULE 3: NoSQL Databases (Q28–Q35) ──
+  {id:28,module:"Module 3",
+    text:"Which of the following is NOT a NoSQL database?",
+    opts:["A. Cassandra","B. MongoDB","C. SQL Server","D. None of these"],
+    correct:2,explanation:"SQL Server is a Microsoft relational database management system (RDBMS). Cassandra and MongoDB are both NoSQL databases."},
+  {id:29,module:"Module 3",
+    text:"MongoDB is a ______ database.",
+    opts:["A. SQL","B. DBMS","C. NoSQL","D. RDBMS"],
+    correct:2,explanation:"MongoDB is a document-oriented NoSQL database that stores data as BSON (Binary JSON) documents."},
+  {id:30,module:"Module 3",
+    text:"Which of the following is a NoSQL database type?",
+    opts:["A. SQL","B. JSON","C. Document databases","D. None of the above"],
+    correct:2,explanation:"Document databases (e.g., MongoDB, CouchDB) are one of the four main NoSQL types alongside Key-Value, Column-family, and Graph databases."},
+
+  // ── MODULE 4: Spark & Machine Learning (Q31–Q47) ──
+  {id:31,module:"Module 4",
+    text:"Which of the following is/are true about Random Forest and Gradient Boosting ensemble methods?",
+    opts:["A. Both methods can be used for classification task only","B. Random Forest is for classification; Gradient Boosting is for regression only","C. Random Forest is for regression; Gradient Boosting is for classification only","D. Both methods can be used for classification AND regression tasks"],
+    correct:3,explanation:"Both Random Forest and Gradient Boosting are general ensemble methods applicable to both classification and regression problems."},
+  {id:32,module:"Module 4",
+    text:"Which of the following is true about an individual tree (Tk) in Random Forest?",
+    opts:["A. Built on a subset of features AND a subset of observations","B. Built on a subset of features AND full set of observations","C. Built on all features AND a subset of observations","D. Built on all features AND full set of observations"],
+    correct:0,explanation:"Each tree in Random Forest uses feature bagging (random subset of features) and bootstrap sampling (random subset of observations)."},
+  {id:33,module:"Module 4",
+    text:"The primary Machine Learning API for Spark is now the _____ based API.",
+    opts:["A. DataFrame","B. Dataset","C. RDD","D. All of the above"],
+    correct:0,explanation:"Since Spark 2.0, the DataFrame-based API (spark.ml) is the primary ML API; the older RDD-based spark.mllib is in maintenance mode."},
+  {id:34,module:"Module 4",
+    text:"Which of the following is a module for structured data processing in Spark?",
+    opts:["A. GraphX","B. MLlib","C. SparkSQL","D. SparkR"],
+    correct:2,explanation:"SparkSQL is Spark's module for structured data processing, providing DataFrame/Dataset APIs and SQL query support."},
+  {id:35,module:"Module 4",
+    text:"SparkSQL translates commands into codes. These codes are processed by ________.",
+    opts:["A. Driver nodes","B. Executor nodes","C. Cluster Manager","D. None of the above"],
+    correct:1,explanation:"SparkSQL compiles queries into optimised physical plans executed by Executor nodes on worker machines."},
+  {id:36,module:"Module 4",
+    text:"SparkSQL plays the main role in the optimization of queries.",
+    opts:["A. True","B. False","C. Can't Say","D. None is correct"],
+    correct:0,explanation:"SparkSQL's Catalyst optimizer performs rule-based and cost-based query optimisation, making it central to Spark's query performance."},
+  {id:37,module:"Module 4",
+    text:"What is an action in Spark RDD?",
+    opts:["A. The way to send results from executors to the driver","B. Takes RDD as input and produces one or more RDDs as output","C. Creates one or many new RDDs","D. All of the above"],
+    correct:0,explanation:"An action triggers computation and returns results to the driver or writes to storage. Transformations (not actions) produce new RDDs."},
+  {id:38,module:"Module 4",
+    text:"Which of the following is true about narrow transformation in Spark?",
+    opts:["A. The data required to compute resides on multiple partitions","B. The data required to compute resides on a single partition","C. Both A and B","D. None of the above"],
+    correct:1,explanation:"Narrow transformations (map, filter, flatMap) compute each output partition from a single input partition — no shuffle required."},
+  {id:39,module:"Module 4",
+    text:"__________ is a distributed machine learning framework on top of Spark.",
+    opts:["A. MLlib","B. GraphX","C. Spark Streaming","D. RDDs"],
+    correct:0,explanation:"MLlib is Spark's distributed machine learning library providing scalable ML algorithms, pipelines, and utilities."},
+  {id:40,module:"Module 4",
+    text:"Which component of Spark runtime architecture provides resources to execute a task?",
+    opts:["A. Cluster Manager","B. Worker nodes","C. Driver program","D. Spark Context"],
+    correct:1,explanation:"Worker nodes host Executors which provide the CPU/memory resources to run individual tasks assigned by the Driver."},
+  {id:41,module:"Module 4",
+    text:"Among the following, identify the one which is NOT a type of machine learning.",
+    opts:["A. Unsupervised learning","B. Reinforcement learning","C. Supervised learning","D. Semi-unsupervised learning"],
+    correct:3,explanation:"The three standard types of ML are Supervised, Unsupervised, and Reinforcement learning. Semi-unsupervised is not a recognised category."},
+  {id:42,module:"Module 4",
+    text:"Identify the type of machine learning in which labeled training data is used.",
+    opts:["A. Unsupervised learning","B. Reinforcement learning","C. Semi-supervised learning","D. Supervised learning"],
+    correct:3,explanation:"Supervised learning uses labeled input-output pairs to train a model to map inputs to correct outputs."},
+  {id:43,module:"Module 4",
+    text:"Machine learning is a subset of which of the following?",
+    opts:["A. Artificial Intelligence","B. Deep Learning","C. Data Learning","D. None of the above"],
+    correct:0,explanation:"ML is a subset of AI; Deep Learning is a subset of ML. The correct hierarchy is AI ⊃ ML ⊃ Deep Learning."},
+  {id:44,module:"Module 4",
+    text:"Which machine learning technique is best suited for detecting outliers in data?",
+    opts:["A. Classification","B. Clustering","C. Anomaly Detection","D. All of the above"],
+    correct:2,explanation:"Anomaly Detection is specifically designed to identify data points that deviate significantly from expected patterns (outliers)."},
+  {id:45,module:"Module 4",
+    text:"Which of the following are common classes of problems in machine learning?",
+    opts:["A. Regression","B. Classification","C. Clustering","D. All of the above"],
+    correct:3,explanation:"Regression, Classification, and Clustering are the three fundamental problem categories in machine learning."},
+  {id:46,module:"Module 4",
+    text:"What is a content-based recommendation system?",
+    opts:["A. Recommends items based on a profile built from the user's own preferences and item attributes","B. Recommends based on similarity among items only","C. Recommends based on similarity among users","D. All of the above"],
+    correct:0,explanation:"Content-based filtering builds a user profile from their past interactions and recommends items with similar attributes — independent of other users."},
+  {id:47,module:"Module 4",
+    text:"Machine Learning is a field of AI consisting of learning algorithms that __________.",
+    opts:["A. Are good at executing some task","B. Improve over time with experience","C. Improve their performance","D. All of the above"],
+    correct:3,explanation:"ML algorithms improve their performance at executing tasks over time with more data/experience — all three describe ML correctly."},
+  {id:48,module:"Module 4",
+    text:"Which machine learning algorithm is based upon the idea of bagging?",
+    opts:["A. Decision Tree","B. Random Forest","C. Classification","D. Regression"],
+    correct:1,explanation:"Random Forest uses Bootstrap Aggregating (bagging) — training multiple decision trees on random subsets and averaging their predictions."},
+  {id:49,module:"Module 4",
+    text:"Among the following, identify the FALSE statement regarding regression.",
+    opts:["A. It is used for prediction","B. It is used for interpretation","C. It relates inputs to outputs","D. It discovers causal relationships"],
+    correct:3,explanation:"Regression identifies correlational (not causal) relationships between variables. Establishing causation requires controlled experiments, not regression alone."},
+
+  // ── MODULE 5: NoSQL & Tools (Q50) ──
+  {id:50,module:"Module 5",
+    text:"Which of the following is NOT a SparkSQL query execution phase?",
+    opts:["A. Analysis","B. Logical Optimization","C. Execution","D. Physical Planning"],
+    correct:2,explanation:"SparkSQL phases are: Analysis → Logical Optimization → Physical Planning → Code Generation → Execution. Among planning phases, Execution is the final step, not a planning phase."},
 ];
 
 // ══════════════════════════════════════
@@ -798,7 +926,7 @@ const QUESTION_BANK = [
 const S = {
   name:'', usn:'', email:'',
   questions:[], current:0,
-  timeLeft:75*60,
+  timeLeft:90*60,
   warnings:0,
   timerH:null, snapH:null, faceH:null,
   snapshots:[], stream:null,
@@ -1251,7 +1379,8 @@ function startExam(){
   buildPalette();
   renderQ(0);
   startTimer();
-  startTabWatch();
+  startTabWatch();        // wires all anti-cheat listeners via setupAntiCheat()
+  requestFullscreen();    // enforce fullscreen from start
   if(S.stream) startSnaps();
   if(S.stream && faceApiLoaded) startExamFaceDetection();
   document.addEventListener('contextmenu', e=>e.preventDefault());
@@ -1525,23 +1654,212 @@ function startTimer(){
   }, 1000);
 }
 
-// ══════════════════════════════════════
-//  TAB WATCHER
-// ══════════════════════════════════════
-function startTabWatch(){
+// ══════════════════════════════════════════════════════════════════
+//  ANTI-CHEAT SYSTEM
+//  Detects: tab switch, window blur, fullscreen exit, app switch
+//  (mobile), rapid blur events (screenshot-like behaviour).
+//  All signals route through handleViolation() → submitExam().
+//  Real browser events only — no fake screenshot detection.
+// ══════════════════════════════════════════════════════════════════
+
+// ── State for anti-cheat ──
+const AC = {
+  fsViolations : 0,   // fullscreen / window-focus violations
+  blurTimes    : [],  // timestamps of recent blur events (rapid-blur heuristic)
+  lastBlur     : 0,   // timestamp of last blur (debounce)
+  fsWarnShown  : false,
+  listeners    : [],  // refs for cleanup
+};
+
+// ─────────────────────────────────────────────────────────────
+//  setupAntiCheat()
+//  Called once from startExam(). Wires all browser event
+//  listeners. Each event funnels into handleViolation().
+// ─────────────────────────────────────────────────────────────
+function setupAntiCheat() {
+
+  // ── 1. Tab switch / app backgrounding (works on mobile too) ──
+  const onVis = () => {
+    if(document.hidden && !S.submitted) {
+      S.proctoringLog.push({ time: new Date().toISOString(), event: 'tab_hidden_or_app_backgrounded' });
+      handleViolation('tab_switch', 'Tab switched or app moved to background.');
+    }
+  };
   document.addEventListener('visibilitychange', onVis);
+  AC.listeners.push(['visibilitychange', onVis, document]);
+
+  // ── 2. Window blur (desktop: alt-tab, clicking elsewhere) ──
+  const onBlur = () => {
+    if(S.submitted) return;
+    const now = Date.now();
+    // Debounce — ignore if we fired within 800 ms (OS-level re-focus flicker)
+    if(now - AC.lastBlur < 800) return;
+    AC.lastBlur = now;
+
+    // Rapid-blur heuristic: ≥3 blur events within 5 seconds = suspicious
+    AC.blurTimes.push(now);
+    AC.blurTimes = AC.blurTimes.filter(t => now - t < 5000);
+
+    S.proctoringLog.push({
+      time: new Date().toISOString(),
+      event: 'window_blur',
+      rapidBlurCount: AC.blurTimes.length
+    });
+
+    if(AC.blurTimes.length >= 3) {
+      S.proctoringLog.push({ time: new Date().toISOString(), event: 'rapid_blur_suspicious' });
+      handleViolation('suspicious_activity', 'Rapid window focus changes detected (possible screenshot attempt).');
+      AC.blurTimes = []; // reset after firing
+      return;
+    }
+
+    handleViolation('window_blur', 'Exam window lost focus.');
+  };
   window.addEventListener('blur', onBlur);
+  AC.listeners.push(['blur', onBlur, window]);
+
+  // ── 3. Fullscreen exit detection ──
+  const onFsChange = () => {
+    if(S.submitted) return;
+    const inFs = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement
+    );
+    if(!inFs) {
+      S.proctoringLog.push({ time: new Date().toISOString(), event: 'fullscreen_exited' });
+      handleViolation('fullscreen_exit', 'Fullscreen mode was exited.');
+    }
+  };
+  document.addEventListener('fullscreenchange',       onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+  document.addEventListener('mozfullscreenchange',    onFsChange);
+  AC.listeners.push(['fullscreenchange',       onFsChange, document]);
+  AC.listeners.push(['webkitfullscreenchange', onFsChange, document]);
+  AC.listeners.push(['mozfullscreenchange',    onFsChange, document]);
+
+  // ── 4. pagehide / pageshow (mobile app-switch / tab close) ──
+  const onPageHide = () => {
+    if(!S.submitted) {
+      S.proctoringLog.push({ time: new Date().toISOString(), event: 'pagehide_mobile_switch' });
+      // Cannot call finalSubmit reliably here (page may be frozen),
+      // so increment warning counter directly and log for backend.
+      AC.fsViolations++;
+    }
+  };
+  window.addEventListener('pagehide', onPageHide);
+  AC.listeners.push(['pagehide', onPageHide, window]);
+
+  // ── 5. DevTools-like resize heuristic (desktop) ──
+  //  If the window inner height drops significantly while width stays
+  //  the same, it may indicate DevTools opened at the bottom.
+  let lastHeight = window.innerHeight;
+  const onResize = () => {
+    if(S.submitted) return;
+    const dh = lastHeight - window.innerHeight;
+    if(dh > 150 && Math.abs(window.outerWidth - window.innerWidth) < 10) {
+      S.proctoringLog.push({
+        time: new Date().toISOString(),
+        event: 'devtools_resize_heuristic',
+        heightDrop: dh
+      });
+      // Just log — don't trigger violation (too many false positives on mobile)
+    }
+    lastHeight = window.innerHeight;
+  };
+  window.addEventListener('resize', onResize);
+  AC.listeners.push(['resize', onResize, window]);
 }
-function onVis(){ if(document.hidden && !S.submitted) triggerWarn(); }
-function onBlur(){ if(!S.submitted) triggerWarn(); }
-function triggerWarn(){
+
+// ─────────────────────────────────────────────────────────────
+//  handleViolation(reason, detail)
+//  Central router — increments counter, shows warning on 1st,
+//  auto-submits on 2nd. Mirrors the existing tab-warn modal.
+// ─────────────────────────────────────────────────────────────
+function handleViolation(reason, detail) {
   if(S.submitted) return;
-  S.warnings++;
-  document.getElementById('warn-label').textContent = `⚠ ${S.warnings}/2`;
-  if(S.warnings >= 2){ closeModal('modal-tabwarn'); finalSubmit(true,'tab_switch'); return; }
-  document.getElementById('tabwarn-msg').innerHTML =
-    `You left the exam. Warning <b>${S.warnings} of 2</b>. One more violation auto-submits.`;
-  openModal('modal-tabwarn');
+
+  // Tab-switch and window-blur share the existing S.warnings counter
+  // so they are consistent with the existing warn-badge (⚠ N/2).
+  const isBehavioural = ['tab_switch','window_blur','suspicious_activity'].includes(reason);
+  const isFullscreen  = reason === 'fullscreen_exit';
+
+  if(isBehavioural) {
+    S.warnings++;
+    document.getElementById('warn-label').textContent = `⚠ ${S.warnings}/2`;
+    S.proctoringLog.push({ time: new Date().toISOString(), event: 'tab_warn', reason, detail, count: S.warnings });
+
+    if(S.warnings >= 2) {
+      closeModal('modal-tabwarn');
+      submitExam('tab_switch');
+      return;
+    }
+    document.getElementById('tabwarn-msg').innerHTML =
+      `⚠ <b>Suspicious activity detected.</b><br>${detail}<br>` +
+      `Warning <b>${S.warnings} of 2</b>. One more violation will <b>auto-submit</b> your exam.`;
+    openModal('modal-tabwarn');
+
+  } else if(isFullscreen) {
+    AC.fsViolations++;
+    S.proctoringLog.push({ time: new Date().toISOString(), event: 'fullscreen_warn', count: AC.fsViolations });
+
+    if(AC.fsViolations >= 2) {
+      closeModal('modal-fswarn');
+      submitExam('fullscreen_exit');
+      return;
+    }
+    document.getElementById('fswarn-msg').innerHTML =
+      `🚨 <b>You exited fullscreen mode.</b><br>` +
+      `This is violation <b>${AC.fsViolations} of 2</b>.<br>` +
+      `A second violation will <b>auto-submit</b> your exam.`;
+    openModal('modal-fswarn');
+  }
+
+  // Flash the screen red on every violation
+  acFlash();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  submitExam(reason)
+//  Centralized auto-submit — calls finalSubmit() with reason.
+//  This is the single exit point for all violation-triggered
+//  submissions.
+// ─────────────────────────────────────────────────────────────
+function submitExam(reason) {
+  if(S.submitted) return;
+  S.proctoringLog.push({ time: new Date().toISOString(), event: 'auto_submit_triggered', reason });
+  finalSubmit(true, reason);
+}
+
+// ── Re-enter fullscreen when user clicks "Return to Exam" ──
+function dismissFsWarn() {
+  closeModal('modal-fswarn');
+  requestFullscreen();
+}
+
+// ── Red screen flash (visual deterrent on every violation) ──
+function acFlash() {
+  const el = document.getElementById('ac-flash');
+  if(!el) return;
+  el.style.background = 'rgba(201,42,42,0.22)';
+  setTimeout(() => { el.style.background = 'rgba(201,42,42,0)'; }, 400);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Fullscreen helpers
+// ─────────────────────────────────────────────────────────────
+function requestFullscreen() {
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+  if(fn) fn.call(el).catch(() => {});
+}
+
+// ══════════════════════════════════════
+//  TAB WATCHER (legacy — now delegates to setupAntiCheat)
+//  Kept for backward compat; startTabWatch() is called from startExam()
+// ══════════════════════════════════════
+function startTabWatch() {
+  setupAntiCheat();
 }
 
 // ══════════════════════════════════════
@@ -1640,10 +1958,11 @@ function finalSubmit(auto=false, reason='manual'){
   clearInterval(S.snapH);
   clearInterval(S.faceH);
   if(cameraDetectionHandle){ clearInterval(cameraDetectionHandle); cameraDetectionHandle=null; }
-  document.removeEventListener('visibilitychange', onVis);
-  window.removeEventListener('blur', onBlur);
+  // Remove all anti-cheat listeners registered by setupAntiCheat()
+  AC.listeners.forEach(([evt, fn, target]) => target.removeEventListener(evt, fn));
+  AC.listeners = [];
   if(S.stream) S.stream.getTracks().forEach(t=>t.stop());
-  closeModal('modal-submit'); closeModal('modal-tabwarn'); closeModal('modal-procwarn');
+  closeModal('modal-submit'); closeModal('modal-tabwarn'); closeModal('modal-procwarn'); closeModal('modal-fswarn');
   showResults(auto, reason);
 }
 
