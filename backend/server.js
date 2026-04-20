@@ -187,7 +187,14 @@ function loadSubmissions() {
 
 function saveSubmission(usn, email, name) {
   const list = loadSubmissions();
-  list.push({ usn: usn.toUpperCase(), email: email.toLowerCase(), name, submittedAt: new Date().toISOString() });
+  const now = new Date().toISOString();
+  list.push({
+    usn:         usn.toUpperCase(),
+    email:       email.toLowerCase(),
+    name,
+    timestamp:   now,   // ISO timestamp (primary field per spec)
+    submittedAt: now,   // kept for backward compat with existing records
+  });
   try {
     fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(list, null, 2));
   } catch (e) {
@@ -217,7 +224,11 @@ app.post('/api/submit', async (req, res) => {
   // ── Duplicate submission check ──
   if (alreadySubmitted(payload.usn, payload.email)) {
     console.warn(`[Submit] Duplicate submission blocked: USN=${payload.usn} Email=${payload.email}`);
-    return res.status(409).json({ ok: false, error: 'Already submitted', message: 'You have already submitted this exam. Duplicate submissions are not allowed.' });
+    return res.status(409).json({
+      ok: false,
+      error: 'Already submitted',
+      message: 'Duplicate submission detected. You can attempt this exam only once. Your previous submission is already on record.'
+    });
   }
 
   const filename = [
@@ -293,6 +304,33 @@ app.post('/api/submit', async (req, res) => {
     driveLink,
     message: driveMessage,
   });
+});
+
+// ─────────────────────────────────────────────
+//  API: GET /api/check  — called at LOGIN TIME
+//  Verifies USN + Email against submissions.json
+//  BEFORE the exam starts. This is the backend
+//  gate that cannot be bypassed by clearing
+//  browser localStorage.
+// ─────────────────────────────────────────────
+app.get('/api/check', (req, res) => {
+  const usn   = (req.query.usn   || '').trim().toUpperCase();
+  const email = (req.query.email || '').trim().toLowerCase();
+
+  if (!usn && !email) {
+    return res.status(400).json({ ok: false, error: 'USN or Email required.' });
+  }
+
+  if (alreadySubmitted(usn, email)) {
+    console.log(`[Check] Blocked login — already submitted: USN=${usn} Email=${email}`);
+    return res.json({
+      ok:           false,
+      alreadyTaken: true,
+      message:      'You have already submitted this exam. Duplicate attempts are not allowed.',
+    });
+  }
+
+  return res.json({ ok: true, alreadyTaken: false });
 });
 
 // ─────────────────────────────────────────────
